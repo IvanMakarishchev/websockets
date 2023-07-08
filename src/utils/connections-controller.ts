@@ -17,15 +17,14 @@ class ConnectionsController {
 
   updateUserState(id: number, state: UserStates) {
     this.clientsConnections.find(el => el.id === id)!.state = state;
-    // console.log(this.clientsConnections);
   }
 
   getUserByConnection(ws: WebSocket): UserConnections {
     return this.clientsConnections.find((el) => el.ws === ws)!;
   }
 
-  getUserById(id: number): UserConnections {
-    return this.clientsConnections.find((el) => el.id === id)!;
+  getUserById(id: number): UserConnections[] {
+    return this.clientsConnections.filter((el) => el.id === id)!;
   }
 
   getAllConnections() {

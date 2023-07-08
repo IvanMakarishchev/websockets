@@ -22,21 +22,30 @@ export class GameWebsocket {
         const parsedData = parsedMessage.data
           ? (JSON.parse(parsedMessage.data) as MessageData)
           : undefined;
+        // console.log("REQUEST TYPE: ", parsedMessage.type);
+        // console.log("REQUEST INDEX: ", index);
+        // console.log("REQUEST DATA: ", parsedData);
         const result = dataProcessor.processData(
           parsedMessage.type,
           index,
           parsedData
         );
-        (result as []).forEach((el) => ws.send(JSON.stringify(el)));
-        console.log(parsedMessage.type);
-        const update = dataProcessor.updateData(parsedMessage.type, parsedData);
-        if (update) {
-          update.forEach(upd => {
-            (upd[0] as Array<UserConnections>).forEach((el) => {
-              if (el.ws !== ws) el.ws.send(JSON.stringify(upd[1]));
-            });
+        // (result as []).forEach((el) => ws.send(JSON.stringify(el)));
+        result.forEach((mes) =>
+          (mes[0] as UserConnections[]).forEach((el) => {
+            // console.log('SENDING MESSAGE: ', JSON.stringify(mes[1]));
+            el.ws.send(JSON.stringify(mes[1]));
           })
-        }
+        );
+        // console.log(parsedMessage.type);
+        // const update = dataProcessor.updateData(parsedMessage.type, parsedData);
+        // if (update) {
+        //   update.forEach(upd => {
+        //     (upd[0] as Array<UserConnections>).forEach((el) => {
+        //       if (el.ws !== ws) el.ws.send(JSON.stringify(upd[1]));
+        //     });
+        //   })
+        // }
       });
     });
   }

@@ -4,22 +4,24 @@ import {
   NewUser,
   RoomData,
   RoomIndex,
+  Ships,
+  UserConnections,
   UserData,
   WsMessage,
 } from "../interfaces/interfaces";
-import { doAction, doUpdate } from "./ws-actions";
-import { wrapResponse } from "./response-wrapper";
+import { doAction } from "./ws-actions";
 
 class WebSocketDataProcessor {
   private usersData: NewUser[] = [];
   private roomsData: RoomData[] = [];
   private gamesData: GamesData[] = [];
+  private shipsData: Ships[] = [];
 
   processData(
     type: string,
     index: number,
     data?: MessageData
-  ): Array<WsMessage> {
+  ): (UserConnections[] | WsMessage)[][] {
     const result = data
       ? Object.entries(doAction).find((el) => el[0] === type)![1](
           type,
@@ -30,17 +32,6 @@ class WebSocketDataProcessor {
           data: "",
         });
     return result;
-  }
-
-  updateData(type: string, data?: MessageData) {
-    const updateType = Object.entries(doUpdate).find((el) => el[0] === type);
-    return updateType
-      ? data
-        ? updateType[1](data)
-        : updateType[1]({
-            data: "",
-          })
-      : undefined;
   }
 
   createNewUser(data: UserData, index: number): NewUser {
@@ -92,9 +83,19 @@ class WebSocketDataProcessor {
       idPlayer: index,
     };
     this.gamesData.push(newGame);
-    if (this.gamesData) console.log("GAMES GATA: ", this.gamesData);
-    console.log("ROOMS DATA: ", JSON.stringify(this.roomsData));
     return newGame;
+  }
+
+  startGame(data: Ships) {
+    const playerShips = {
+      ships: data.ships,
+      currentPlayerIndex: data.indexPlayer
+    }
+    return playerShips;
+  }
+
+  addShips(data: Ships) {
+    this.shipsData.push(data);
   }
 
   getUsers() {
@@ -107,6 +108,9 @@ class WebSocketDataProcessor {
 
   getUserNameByIndex(index: number) {
     return this.usersData.find((user) => user.index === index)!.name;
+  }
+  getShipsData() {
+    return this.shipsData;
   }
 }
 
