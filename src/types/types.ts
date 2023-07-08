@@ -1,3 +1,3 @@
-import { NewUser, UserData } from "../interfaces/interfaces";
+import { GamesData, NewUser, RoomData, RoomIndex, UserData } from "../interfaces/interfaces";
 
-export type MessageData = UserData | NewUser;
+export type MessageData = NewUser| UserData | RoomData[] | GamesData | RoomIndex | { data: "" };
