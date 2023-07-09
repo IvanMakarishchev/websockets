@@ -3,6 +3,7 @@ import { dataProcessor } from "./ws-data-processor";
 import {
   Attack,
   AttackResult,
+  RandomAttack,
   RoomIndex,
   Ships,
   UserConnections,
@@ -147,10 +148,14 @@ export const doAction = {
       .getGames()
       .find((el) => el.idPlayer === (data as Attack).indexPlayer)!.idGame;
     return [
-      ...attackResult.map((el) => [
-        roomConnections,
-        wrapResponse("attack", el),
-      ]),
+      ...attackResult.map((res) =>
+        !("userId" in res)
+          ? [roomConnections, wrapResponse("attack", res)]
+          : [
+              roomConnections.filter((el) => el.id === res.userId)!,
+              wrapResponse("attack", res),
+            ]
+      ),
       [
         roomConnections,
         wrapResponse("turn", { currentPlayer: dataProcessor.getTurn(gameId) }),
@@ -175,14 +180,63 @@ export const doAction = {
       .getGames()
       .find((el) => el.idPlayer === (data as Attack).indexPlayer)!.idGame;
     return [
-      ...attackResult.map((el) => [
-        roomConnections,
-        wrapResponse("attack", el),
-      ]),
+      ...attackResult.map((res) =>
+        !("userId" in res)
+          ? [roomConnections, wrapResponse("attack", res)]
+          : [
+              roomConnections.filter((el) => el.id === res.userId)!,
+              wrapResponse("attack", res),
+            ]
+      ),
       [
         roomConnections,
         wrapResponse("turn", { currentPlayer: dataProcessor.getTurn(gameId) }),
       ],
     ];
+  },
+  is_winner: (type: string, index: number, data: MessageData) => {
+    if (type === "attack" || type === "randomAttack") {
+      const roomConnections = dataProcessor
+        .getRooms()
+        .find(
+          (el) =>
+            el.roomUsers[0].index === index || el.roomUsers[1].index === index
+        )!
+        .roomUsers.map(
+          (user) =>
+            connections.getAllConnections().find((el) => el.id === user.index)!
+        );
+      const enemyId = dataProcessor
+        .getRooms()
+        .find((room) => room.roomId === (data as RandomAttack).gameId)!
+        .roomUsers.find(
+          (el) => el.index !== (data as RandomAttack).indexPlayer
+        )!.index;
+      const enemyCords = dataProcessor
+        .getShipCords()
+        .find((el) => el.indexPlayer === enemyId)!
+        .ships.flat()
+        .flat();
+      if (!enemyCords.length) {
+        const winnerName = dataProcessor.getUserNameByIndex(
+          (data as RandomAttack).indexPlayer
+        );
+        dataProcessor.addWinner(winnerName);
+        return [
+          [
+            roomConnections,
+            wrapResponse("finish", {
+              winPlayer: (data as RandomAttack).indexPlayer,
+            }),
+          ],
+          [
+            roomConnections,
+            wrapResponse("update_winners", 
+              dataProcessor.getWinners(),
+            ),
+          ],
+        ];
+      } else return [];
+    } else return [];
   },
 };

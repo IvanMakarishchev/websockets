@@ -13,6 +13,7 @@ import {
   UserData,
   UsersHits,
   UsersTurn,
+  Winners,
   WsMessage,
 } from "../interfaces/interfaces";
 import { doAction } from "./ws-actions";
@@ -27,6 +28,7 @@ class WebSocketDataProcessor {
   private usersHits: UsersHits[] = [];
   private availableHits: UsersHits[] = [];
   private usersTurns: UsersTurn[] = [];
+  private winnersData: Winners[] = [];
 
   processData(
     type: string,
@@ -42,7 +44,7 @@ class WebSocketDataProcessor {
       : Object.entries(doAction).find((el) => el[0] === type)![1](type, index, {
           data: "",
         });
-    return result;
+    return [...result, ...doAction.is_winner(type, index, data as MessageData)];
   }
 
   createNewUser(data: UserData, index: number): NewUser {
@@ -142,18 +144,18 @@ class WebSocketDataProcessor {
   }
 
   attackResult(data: Attack) {
-    const gameId = this.gamesData.find(el => el.idPlayer)!.idGame;
+    const gameId = this.gamesData.find((el) => el.idPlayer)!.idGame;
     const gameIndex = this.usersTurns.findIndex((el) => el.gameID === gameId)!;
     let isAvailableSector = false;
-    console.log(`GAME ID: ${gameId}`);
-    console.log(`GAME INDEX: ${gameIndex}`);
-    console.log(`USERS TURNS: ${JSON.stringify(this.usersTurns)}`);
+    // console.log(`GAME ID: ${gameId}`);
+    // console.log(`GAME INDEX: ${gameIndex}`);
+    // console.log(`USERS TURNS: ${JSON.stringify(this.usersTurns)}`);
     let isPlayerTurn = data.indexPlayer === this.usersTurns[gameIndex].turn[0];
     const userAvailableHits = this.availableHits.find(
       (el) => el.indexPlayer === data.indexPlayer
     );
     (userAvailableHits!.hits as Set<number[]>).forEach((el) => {
-      if (el[0] === data.x && el[1] === data.y) {
+      if (el[0] === data.x && el[1] === data.y && isPlayerTurn) {
         (userAvailableHits!.hits as Set<number[]>).delete(el);
         isAvailableSector = true;
       }
@@ -202,6 +204,7 @@ class WebSocketDataProcessor {
         }
       });
       return {
+        userId: data.indexPlayer,
         position: {
           x: pos.x,
           y: pos.y,
@@ -240,9 +243,15 @@ class WebSocketDataProcessor {
         number[]
       >
     );
-    console.log(`User: ${index}, Hits array length: ${userAvailableHits.length}`);
-    const randomCords = Math.round(Math.random() * userAvailableHits.length - 1);
-    console.log('Hits: %s', userAvailableHits);
+    // console.log(
+    //   `User: ${index}, Hits array length: ${userAvailableHits.length}`
+    // );
+    const randomCords = Math.round(
+      Math.random() * userAvailableHits.length > 0
+        ? Math.abs(userAvailableHits.length - 1)
+        : 0
+    );
+    // console.log("Hits: %s", userAvailableHits);
     console.log(randomCords);
     return {
       gameID: (data as RandomAttack).gameID,
@@ -277,9 +286,26 @@ class WebSocketDataProcessor {
   getShipsData() {
     return this.shipsData;
   }
+  getShipCords() {
+    return this.shipsCoords;
+  }
 
   getGames() {
     return this.gamesData;
+  }
+
+  addWinner(name: string) {
+    let wasWinner = false;
+    this.winnersData.forEach((el) => {
+      if (el.name === name) wasWinner = true;
+    });
+    wasWinner
+      ? this.winnersData.find((el) => el.name === name)!.wins++
+      : (this.winnersData = [...this.winnersData, { name: name, wins: 1 }]);
+  }
+
+  getWinners() {
+    return this.winnersData;
   }
 }
 
