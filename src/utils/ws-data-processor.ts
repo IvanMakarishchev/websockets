@@ -3,6 +3,7 @@ import {
   Attack,
   GamesData,
   NewUser,
+  RandomAttack,
   RawPosition,
   RawShips,
   RoomData,
@@ -10,9 +11,12 @@ import {
   Ships,
   UserConnections,
   UserData,
+  UsersHits,
+  UsersTurn,
   WsMessage,
 } from "../interfaces/interfaces";
 import { doAction } from "./ws-actions";
+import { fillSectors } from "./fill-around";
 
 class WebSocketDataProcessor {
   private usersData: NewUser[] = [];
@@ -20,6 +24,9 @@ class WebSocketDataProcessor {
   private gamesData: GamesData[] = [];
   private shipsCoords: Ships[] = [];
   private shipsData: Ships[] = [];
+  private usersHits: UsersHits[] = [];
+  private availableHits: UsersHits[] = [];
+  private usersTurns: UsersTurn[] = [];
 
   processData(
     type: string,
@@ -119,20 +126,47 @@ class WebSocketDataProcessor {
     };
     this.shipsCoords.push(updatedShips);
     this.shipsData.push(data);
+    this.usersHits.push({ indexPlayer: data.indexPlayer!, hits: [] });
+    this.availableHits = [
+      ...this.availableHits,
+      {
+        indexPlayer: data.indexPlayer!,
+        hits: new Set(
+          new Array(10)
+            .fill([])
+            .map((_, iY) => new Array(10).fill([]).map((_, iX) => [iX, iY]))
+            .flat()
+        ),
+      },
+    ];
   }
 
   attackResult(data: Attack) {
+    const gameId = this.gamesData.find(el => el.idPlayer)!.idGame;
+    const gameIndex = this.usersTurns.findIndex((el) => el.gameID === gameId)!;
+    let isAvailableSector = false;
+    console.log(`GAME ID: ${gameId}`);
+    console.log(`GAME INDEX: ${gameIndex}`);
+    console.log(`USERS TURNS: ${JSON.stringify(this.usersTurns)}`);
+    let isPlayerTurn = data.indexPlayer === this.usersTurns[gameIndex].turn[0];
+    const userAvailableHits = this.availableHits.find(
+      (el) => el.indexPlayer === data.indexPlayer
+    );
+    (userAvailableHits!.hits as Set<number[]>).forEach((el) => {
+      if (el[0] === data.x && el[1] === data.y) {
+        (userAvailableHits!.hits as Set<number[]>).delete(el);
+        isAvailableSector = true;
+      }
+    });
+    if (!isAvailableSector || !isPlayerTurn) return [];
     const shipsDataByPlayer = this.shipsCoords.find(
       (el) => el.indexPlayer === data.indexPlayer
     );
-    let shipsId = -1;
-    const enemyPositions = this.shipsCoords.find((sData, i) => {
-      shipsId = i;
-      return (
+    const enemyPositions = this.shipsCoords.find(
+      (sData, i) =>
         sData.gameId === shipsDataByPlayer!.gameId &&
         sData.indexPlayer !== shipsDataByPlayer!.indexPlayer
-      );
-    })!.ships as RawPosition[][][];
+    )!.ships as RawPosition[][][];
     let res = "miss";
     const killedArray: RawPosition[] = [];
     enemyPositions.forEach((el) => {
@@ -141,13 +175,40 @@ class WebSocketDataProcessor {
       );
       if (index >= 0) {
         el[1].push(...el[0].splice(index, 1));
-        if (el[0].length > 0) res = "shot";
-        else {
+        if (el[0].length > 0) {
+          res = "shot";
+          (
+            this.usersHits.find((el) => el.indexPlayer === data.indexPlayer)!
+              .hits as RawPosition[]
+          ).push({ x: data.x, y: data.y });
+        } else {
           killedArray.push(...el[1]);
           el[1].length = 0;
           res = "killed";
         }
       }
+    });
+    if (res === "miss") {
+      [...this.usersTurns[gameIndex].turn] = [
+        this.usersTurns[gameIndex].turn[1],
+        this.usersTurns[gameIndex].turn[0],
+      ];
+    }
+    const missArray = fillSectors(killedArray).map((pos) => {
+      (userAvailableHits!.hits as Set<number[]>).forEach((el) => {
+        if (el[0] === pos.x && el[1] === pos.y) {
+          (userAvailableHits!.hits as Set<number[]>).delete(el);
+          isAvailableSector = true;
+        }
+      });
+      return {
+        position: {
+          x: pos.x,
+          y: pos.y,
+        },
+        currentPlayer: data.indexPlayer,
+        status: "miss",
+      };
     });
     return res !== "killed"
       ? [
@@ -160,14 +221,46 @@ class WebSocketDataProcessor {
             status: res,
           },
         ]
-      : killedArray.map((el) => ({
-          position: {
-            x: el.x,
-            y: el.y,
-          },
-          currentPlayer: data.indexPlayer,
-          status: res,
-        }));
+      : [
+          ...killedArray.map((el) => ({
+            position: {
+              x: el.x,
+              y: el.y,
+            },
+            currentPlayer: data.indexPlayer,
+            status: res,
+          })),
+          ...missArray,
+        ];
+  }
+
+  getRandomData(index: number, data: MessageData) {
+    const userAvailableHits = Array.from(
+      this.availableHits.find((el) => el.indexPlayer === index)!.hits as Set<
+        number[]
+      >
+    );
+    console.log(`User: ${index}, Hits array length: ${userAvailableHits.length}`);
+    const randomCords = Math.round(Math.random() * userAvailableHits.length - 1);
+    console.log('Hits: %s', userAvailableHits);
+    console.log(randomCords);
+    return {
+      gameID: (data as RandomAttack).gameID,
+      x: userAvailableHits[randomCords][0],
+      y: userAvailableHits[randomCords][1],
+      indexPlayer: index,
+    };
+  }
+
+  playerTurn(firstIndex: number, secondIndex: number, gameID: number) {
+    this.usersTurns.push({
+      gameID: gameID,
+      turn: [firstIndex, secondIndex],
+    });
+  }
+
+  getTurn(index: number) {
+    return this.usersTurns.find((el) => el.gameID === index)!.turn[0];
   }
 
   getUsers() {
@@ -183,6 +276,10 @@ class WebSocketDataProcessor {
   }
   getShipsData() {
     return this.shipsData;
+  }
+
+  getGames() {
+    return this.gamesData;
   }
 }
 

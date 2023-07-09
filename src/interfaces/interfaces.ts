@@ -67,3 +67,18 @@ export interface AttackResult {
   currentPlayer: number;
   status: AttackStatus;
 }
+export interface UsersHits {
+  indexPlayer: number;
+  hits: RawPosition[] | Set<number[]>;
+}
+export interface RandomAttack {
+  gameID: number;
+  indexPlayer: number;
+}
+export interface UsersTurn {
+  gameID: number;
+  turn: number[];
+}
+export interface CurrentTurn {
+  currentPlayer: number;
+}

@@ -104,14 +104,30 @@ export const doAction = {
     const isReady = dataProcessor
       .getShipsData()
       .filter((el) => el.gameId === shipsData.gameId);
-    if (isReady.length > 1)
+    if (isReady.length > 1) {
       return [
         [
           roomConnections,
           wrapResponse("start_game", dataProcessor.startGame(shipsData)),
         ],
+        [
+          roomConnections,
+          wrapResponse("turn", {
+            currentPlayer: dataProcessor.getTurn((data as Ships).gameId!),
+          }),
+        ],
       ];
-    else return [];
+    } else {
+      const room = dataProcessor
+        .getRooms()
+        .find((el) => el.roomId === (data as Ships).gameId);
+      dataProcessor.playerTurn(
+        index,
+        room!.roomUsers.find((el) => el.index !== index)!.index,
+        (data as Ships).gameId!
+      );
+      return [];
+    }
   },
   attack: (type: string, index: number, data: MessageData) => {
     const roomConnections = dataProcessor
@@ -127,11 +143,46 @@ export const doAction = {
     const attackResult = dataProcessor.attackResult(
       data as Attack
     ) as AttackResult[];
+    const gameId = dataProcessor
+      .getGames()
+      .find((el) => el.idPlayer === (data as Attack).indexPlayer)!.idGame;
     return [
       ...attackResult.map((el) => [
         roomConnections,
         wrapResponse("attack", el),
       ]),
+      [
+        roomConnections,
+        wrapResponse("turn", { currentPlayer: dataProcessor.getTurn(gameId) }),
+      ],
+    ];
+  },
+  randomAttack: (type: string, index: number, data: MessageData) => {
+    const roomConnections = dataProcessor
+      .getRooms()
+      .find(
+        (el) =>
+          el.roomUsers[0].index === index || el.roomUsers[1].index === index
+      )!
+      .roomUsers.map(
+        (user) =>
+          connections.getAllConnections().find((el) => el.id === user.index)!
+      );
+    const attackResult = dataProcessor.attackResult(
+      dataProcessor.getRandomData(index, data)
+    ) as AttackResult[];
+    const gameId = dataProcessor
+      .getGames()
+      .find((el) => el.idPlayer === (data as Attack).indexPlayer)!.idGame;
+    return [
+      ...attackResult.map((el) => [
+        roomConnections,
+        wrapResponse("attack", el),
+      ]),
+      [
+        roomConnections,
+        wrapResponse("turn", { currentPlayer: dataProcessor.getTurn(gameId) }),
+      ],
     ];
   },
 };
