@@ -1,5 +1,5 @@
 import { UserStates } from "enums/enums";
-import { ShipTypes } from "types/types";
+import { AttackStatus, ShipTypes } from "types/types";
 import { WebSocket } from "ws";
 
 export interface WsMessage {
@@ -38,18 +38,32 @@ export interface UserConnections {
   state: UserStates;
 }
 export interface Ships {
-  ships: [
-    {
-      position: {
-        x: number;
-        y: number;
-      };
-      direction: boolean;
-      length: number;
-      type: ShipTypes;
-    }
-  ];
+  ships: RawShips[] | RawPosition[][][];
   gameId?: number;
   indexPlayer?: number;
   currentPlayerIndex?: number;
+}
+export interface RawPosition {
+  x: number;
+  y: number;
+}
+export interface RawShips {
+  position: RawPosition | Array<RawPosition>;
+  direction: boolean;
+  length: number;
+  type: ShipTypes;
+}
+export interface Attack {
+  gameID: number;
+  x: number;
+  y: number;
+  indexPlayer: number;
+}
+export interface AttackResult {
+  position: {
+    x: number;
+    y: number;
+  };
+  currentPlayer: number;
+  status: AttackStatus;
 }

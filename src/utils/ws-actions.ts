@@ -1,6 +1,8 @@
 import { MessageData } from "../types/types";
 import { dataProcessor } from "./ws-data-processor";
 import {
+  Attack,
+  AttackResult,
   RoomIndex,
   Ships,
   UserConnections,
@@ -110,5 +112,26 @@ export const doAction = {
         ],
       ];
     else return [];
+  },
+  attack: (type: string, index: number, data: MessageData) => {
+    const roomConnections = dataProcessor
+      .getRooms()
+      .find(
+        (el) =>
+          el.roomUsers[0].index === index || el.roomUsers[1].index === index
+      )!
+      .roomUsers.map(
+        (user) =>
+          connections.getAllConnections().find((el) => el.id === user.index)!
+      );
+    const attackResult = dataProcessor.attackResult(
+      data as Attack
+    ) as AttackResult[];
+    return [
+      ...attackResult.map((el) => [
+        roomConnections,
+        wrapResponse("attack", el),
+      ]),
+    ];
   },
 };

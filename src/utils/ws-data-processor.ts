@@ -1,7 +1,10 @@
 import { MessageData } from "../types/types";
 import {
+  Attack,
   GamesData,
   NewUser,
+  RawPosition,
+  RawShips,
   RoomData,
   RoomIndex,
   Ships,
@@ -15,6 +18,7 @@ class WebSocketDataProcessor {
   private usersData: NewUser[] = [];
   private roomsData: RoomData[] = [];
   private gamesData: GamesData[] = [];
+  private shipsCoords: Ships[] = [];
   private shipsData: Ships[] = [];
 
   processData(
@@ -89,13 +93,81 @@ class WebSocketDataProcessor {
   startGame(data: Ships) {
     const playerShips = {
       ships: data.ships,
-      currentPlayerIndex: data.indexPlayer
-    }
+      currentPlayerIndex: data.indexPlayer,
+    };
     return playerShips;
   }
 
   addShips(data: Ships) {
+    const updatedShips = {
+      ...data,
+      ships: (data.ships as RawShips[]).map(
+        (el) =>
+          (el.position = [
+            JSON.parse(
+              `[${JSON.stringify(el.position)
+                .repeat(el.length)
+                .replaceAll("}{", "},{")}]`
+            ).map((pos: RawPosition, i: number) =>
+              el.direction
+                ? { x: pos.x, y: pos.y + i }
+                : { x: pos.x + i, y: pos.y }
+            ),
+            [],
+          ])
+      ),
+    };
+    this.shipsCoords.push(updatedShips);
     this.shipsData.push(data);
+  }
+
+  attackResult(data: Attack) {
+    const shipsDataByPlayer = this.shipsCoords.find(
+      (el) => el.indexPlayer === data.indexPlayer
+    );
+    let shipsId = -1;
+    const enemyPositions = this.shipsCoords.find((sData, i) => {
+      shipsId = i;
+      return (
+        sData.gameId === shipsDataByPlayer!.gameId &&
+        sData.indexPlayer !== shipsDataByPlayer!.indexPlayer
+      );
+    })!.ships as RawPosition[][][];
+    let res = "miss";
+    const killedArray: RawPosition[] = [];
+    enemyPositions.forEach((el) => {
+      const index = el[0].findIndex(
+        (pos: RawPosition) => pos.x === data.x && pos.y === data.y
+      );
+      if (index >= 0) {
+        el[1].push(...el[0].splice(index, 1));
+        if (el[0].length > 0) res = "shot";
+        else {
+          killedArray.push(...el[1]);
+          el[1].length = 0;
+          res = "killed";
+        }
+      }
+    });
+    return res !== "killed"
+      ? [
+          {
+            position: {
+              x: data.x,
+              y: data.y,
+            },
+            currentPlayer: data.indexPlayer,
+            status: res,
+          },
+        ]
+      : killedArray.map((el) => ({
+          position: {
+            x: el.x,
+            y: el.y,
+          },
+          currentPlayer: data.indexPlayer,
+          status: res,
+        }));
   }
 
   getUsers() {
