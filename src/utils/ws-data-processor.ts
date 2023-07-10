@@ -247,12 +247,13 @@ class WebSocketDataProcessor {
     //   `User: ${index}, Hits array length: ${userAvailableHits.length}`
     // );
     const randomCords = Math.round(
-      Math.random() * userAvailableHits.length > 0
+      Math.random() * (userAvailableHits.length > 0
         ? Math.abs(userAvailableHits.length - 1)
-        : 0
+        : 0)
     );
     // console.log("Hits: %s", userAvailableHits);
-    console.log(randomCords);
+    console.log('AWAILABLE HITS LENGTH: ', userAvailableHits.length);
+    console.log('RANDOM CORDS: ', randomCords);
     return {
       gameID: (data as RandomAttack).gameID,
       x: userAvailableHits[randomCords][0],
