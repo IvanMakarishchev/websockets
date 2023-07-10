@@ -98,12 +98,15 @@ export const doAction = {
   },
   add_ships: (type: string, index: number, data: MessageData) => {
     const shipsData = data as Ships;
+    console.log("SHIPS DATA: ", data);
+    console.log("GET ROOMS: %s", JSON.stringify(dataProcessor.getRooms()));
     dataProcessor.addShips(shipsData);
     const roomConnections = dataProcessor
       .getRooms()
       .find(
         (el) =>
-          el.roomUsers[0].index === index || el.roomUsers[1].index === index
+          el.roomUsers.length &&
+          (el.roomUsers[0].index === index || el.roomUsers[1].index === index)
       )!
       .roomUsers.map(
         (user) =>
@@ -142,7 +145,8 @@ export const doAction = {
       .getRooms()
       .find(
         (el) =>
-          el.roomUsers[0].index === index || el.roomUsers[1].index === index
+          el.roomUsers.length &&
+          (el.roomUsers[0].index === index || el.roomUsers[1].index === index)
       )!
       .roomUsers.map(
         (user) =>
@@ -174,7 +178,8 @@ export const doAction = {
       .getRooms()
       .find(
         (el) =>
-          el.roomUsers[0].index === index || el.roomUsers[1].index === index
+          el.roomUsers.length &&
+          (el.roomUsers[0].index === index || el.roomUsers[1].index === index)
       )!
       .roomUsers.map(
         (user) =>
@@ -207,7 +212,8 @@ export const doAction = {
         .getRooms()
         .find(
           (el) =>
-            el.roomUsers[0].index === index || el.roomUsers[1].index === index
+            el.roomUsers.length &&
+            (el.roomUsers[0].index === index || el.roomUsers[1].index === index)
         )!
         .roomUsers.map(
           (user) =>
@@ -229,6 +235,15 @@ export const doAction = {
           (data as RandomAttack).indexPlayer
         );
         dataProcessor.addWinner(winnerName);
+        console.log("WINNER DATA: ", data);
+        dataProcessor.clearGame(
+          roomConnections[0].id,
+          roomConnections[1].id,
+          (data as RandomAttack).gameId!
+        );
+        roomConnections.forEach((el) =>
+          connections.updateUserState(el.id, UserStates.logged)
+        );
         return [
           [
             roomConnections,
@@ -239,6 +254,10 @@ export const doAction = {
           [
             roomConnections,
             wrapResponse("update_winners", dataProcessor.getWinners()),
+          ],
+          [
+            roomConnections,
+            wrapResponse("update_room", dataProcessor.getPendingRooms()),
           ],
         ];
       } else return [];

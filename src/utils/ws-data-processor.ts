@@ -87,7 +87,7 @@ class WebSocketDataProcessor {
   }
 
   getPendingRooms() {
-    return this.roomsData.filter((el) => el.roomUsers.length < 2);
+    return this.roomsData.filter((el) => el.roomUsers.length === 1);
   }
 
   createGame(index: number, roomIndex: RoomIndex) {
@@ -147,9 +147,10 @@ class WebSocketDataProcessor {
     const gameId = this.gamesData.find((el) => el.idPlayer)!.idGame;
     const gameIndex = this.usersTurns.findIndex((el) => el.gameID === gameId)!;
     let isAvailableSector = false;
-    // console.log(`GAME ID: ${gameId}`);
+    console.log(`GAME ID: ${gameId}`);
+    console.log(`GAMES DATA: ${this.gamesData}`);
     // console.log(`GAME INDEX: ${gameIndex}`);
-    // console.log(`USERS TURNS: ${JSON.stringify(this.usersTurns)}`);
+    console.log(`USERS TURNS: ${JSON.stringify(this.usersTurns)}`);
     let isPlayerTurn = data.indexPlayer === this.usersTurns[gameIndex].turn[0];
     const userAvailableHits = this.availableHits.find(
       (el) => el.indexPlayer === data.indexPlayer
@@ -247,13 +248,14 @@ class WebSocketDataProcessor {
     //   `User: ${index}, Hits array length: ${userAvailableHits.length}`
     // );
     const randomCords = Math.round(
-      Math.random() * (userAvailableHits.length > 0
-        ? Math.abs(userAvailableHits.length - 1)
-        : 0)
+      Math.random() *
+        (userAvailableHits.length > 0
+          ? Math.abs(userAvailableHits.length - 1)
+          : 0)
     );
     // console.log("Hits: %s", userAvailableHits);
-    console.log('AWAILABLE HITS LENGTH: ', userAvailableHits.length);
-    console.log('RANDOM CORDS: ', randomCords);
+    console.log("AWAILABLE HITS LENGTH: ", userAvailableHits.length);
+    console.log("RANDOM CORDS: ", randomCords);
     return {
       gameID: (data as RandomAttack).gameID,
       x: userAvailableHits[randomCords][0],
@@ -307,6 +309,55 @@ class WebSocketDataProcessor {
 
   getWinners() {
     return this.winnersData;
+  }
+
+  clearGame(pOneId: number, pTwoId: number, gameIndex: number) {
+    // console.log("usersData DATA: ", this.usersData);
+    // console.log("roomsData DATA: ", this.roomsData);
+    // console.log("gamesData DATA: ", this.gamesData);
+    // console.log("shipsCoords DATA: ", this.shipsCoords);
+    // console.log("shipsData DATA: ", this.shipsData);
+    // console.log("usersHits DATA: ", this.usersHits);
+    // console.log("availableHits DATA: ", this.availableHits);
+    // console.log("usersTurns DATA: ", this.usersTurns);
+    // console.log("winnersData DATA: ", this.winnersData);
+    this.roomsData.find((el) => el.roomId === gameIndex)!.roomUsers = [];
+    this.gamesData.splice(
+      this.gamesData.findIndex((el) => el.idPlayer === pOneId),
+      1
+    );
+    this.gamesData.splice(
+      this.gamesData.findIndex((el) => el.idPlayer === pTwoId),
+      1
+    );
+    this.usersTurns.splice(
+      this.usersTurns.findIndex((el) => el.gameID === gameIndex),
+      1
+    );
+    this.shipsCoords
+      .filter((el) => el.gameId === gameIndex)
+      .forEach((el) =>
+        this.shipsCoords.splice(this.shipsCoords.indexOf(el), 1)
+      );
+    this.shipsData
+      .filter((el) => el.gameId === gameIndex)
+      .forEach((el) => this.shipsData.splice(this.shipsData.indexOf(el), 1));
+    this.usersHits.splice(
+      this.usersHits.findIndex((el) => el.indexPlayer === pOneId),
+      1
+    );
+    this.usersHits.splice(
+      this.usersHits.findIndex((el) => el.indexPlayer === pTwoId),
+      1
+    );
+    this.availableHits.splice(
+      this.availableHits.findIndex((el) => el.indexPlayer === pOneId),
+      1
+    );
+    this.availableHits.splice(
+      this.availableHits.findIndex((el) => el.indexPlayer === pTwoId),
+      1
+    );
   }
 }
 
