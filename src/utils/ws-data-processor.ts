@@ -19,6 +19,7 @@ import {
 import { doAction } from "./ws-actions";
 import { fillSectors } from "./fill-around";
 import { connections } from "./connections-controller";
+import { pasReg } from "../constants/constants";
 
 class WebSocketDataProcessor {
   private usersData: NewUser[] = [];
@@ -49,11 +50,21 @@ class WebSocketDataProcessor {
   }
 
   createNewUser(data: UserData, index: number): NewUser {
+    let errorMessage = "";
+    if (data.name.length < 5)
+      errorMessage = "You need minimum 5 characters for name";
+    if (data.password.length < 5)
+      errorMessage = "You need minimum 5 characters for password";
+    if (data.name[0] !== data.name[0].toUpperCase())
+      errorMessage = "Start your name with catital letter";
+    if (!data.password.match(pasReg))
+      errorMessage =
+        "Password error: min 8 characters, one letter and one number";
     const newUser = {
       name: data.name,
       index: index,
-      error: false,
-      errorText: "",
+      error: Boolean(errorMessage),
+      errorText: errorMessage,
     };
     this.usersData.push(newUser);
     return this.getUser(newUser.name);
