@@ -36,6 +36,7 @@ export interface UserConnections {
   ws: WebSocket;
   id: number;
   state: UserStates;
+  isAlive: boolean;
 }
 export interface Ships {
   ships: RawShips[] | RawPosition[][][];

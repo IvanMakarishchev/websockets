@@ -18,6 +18,7 @@ import {
 } from "../interfaces/interfaces";
 import { doAction } from "./ws-actions";
 import { fillSectors } from "./fill-around";
+import { connections } from "./connections-controller";
 
 class WebSocketDataProcessor {
   private usersData: NewUser[] = [];
@@ -60,7 +61,7 @@ class WebSocketDataProcessor {
 
   createRoom(index: number) {
     const newRoom = {
-      roomId: this.roomsData.length,
+      roomId: Date.now(),
       roomUsers: [
         {
           name: this.getUserNameByIndex(index),
@@ -147,10 +148,10 @@ class WebSocketDataProcessor {
     const gameId = this.gamesData.find((el) => el.idPlayer)!.idGame;
     const gameIndex = this.usersTurns.findIndex((el) => el.gameID === gameId)!;
     let isAvailableSector = false;
-    console.log(`GAME ID: ${gameId}`);
-    console.log(`GAMES DATA: ${this.gamesData}`);
+    // console.log(`GAME ID: ${gameId}`);
+    // console.log(`GAMES DATA: ${this.gamesData}`);
     // console.log(`GAME INDEX: ${gameIndex}`);
-    console.log(`USERS TURNS: ${JSON.stringify(this.usersTurns)}`);
+    // console.log(`USERS TURNS: ${JSON.stringify(this.usersTurns)}`);
     let isPlayerTurn = data.indexPlayer === this.usersTurns[gameIndex].turn[0];
     const userAvailableHits = this.availableHits.find(
       (el) => el.indexPlayer === data.indexPlayer
@@ -254,8 +255,8 @@ class WebSocketDataProcessor {
           : 0)
     );
     // console.log("Hits: %s", userAvailableHits);
-    console.log("AWAILABLE HITS LENGTH: ", userAvailableHits.length);
-    console.log("RANDOM CORDS: ", randomCords);
+    // console.log("AWAILABLE HITS LENGTH: ", userAvailableHits.length);
+    // console.log("RANDOM CORDS: ", randomCords);
     return {
       gameID: (data as RandomAttack).gameID,
       x: userAvailableHits[randomCords][0],
@@ -311,17 +312,18 @@ class WebSocketDataProcessor {
     return this.winnersData;
   }
 
+  removeRoom(index: number) {
+    this.roomsData.splice(
+      this.roomsData.findIndex((el) => el.roomId === index),
+      1
+    );
+  }
+
   clearGame(pOneId: number, pTwoId: number, gameIndex: number) {
-    // console.log("usersData DATA: ", this.usersData);
-    // console.log("roomsData DATA: ", this.roomsData);
-    // console.log("gamesData DATA: ", this.gamesData);
-    // console.log("shipsCoords DATA: ", this.shipsCoords);
-    // console.log("shipsData DATA: ", this.shipsData);
-    // console.log("usersHits DATA: ", this.usersHits);
-    // console.log("availableHits DATA: ", this.availableHits);
-    // console.log("usersTurns DATA: ", this.usersTurns);
-    // console.log("winnersData DATA: ", this.winnersData);
-    this.roomsData.find((el) => el.roomId === gameIndex)!.roomUsers = [];
+    this.roomsData.splice(
+      this.roomsData.findIndex((el) => el.roomId === gameIndex),
+      1
+    );
     this.gamesData.splice(
       this.gamesData.findIndex((el) => el.idPlayer === pOneId),
       1
@@ -358,6 +360,15 @@ class WebSocketDataProcessor {
       this.availableHits.findIndex((el) => el.indexPlayer === pTwoId),
       1
     );
+    console.log("usersData DATA: ", this.usersData);
+    console.log("roomsData DATA: ", this.roomsData);
+    console.log("gamesData DATA: ", this.gamesData);
+    console.log("shipsCoords DATA: ", this.shipsCoords);
+    console.log("shipsData DATA: ", this.shipsData);
+    console.log("usersHits DATA: ", this.usersHits);
+    console.log("availableHits DATA: ", this.availableHits);
+    console.log("usersTurns DATA: ", this.usersTurns);
+    console.log("winnersData DATA: ", this.winnersData);
   }
 }
 

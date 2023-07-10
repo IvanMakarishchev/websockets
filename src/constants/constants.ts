@@ -1,0 +1,1 @@
+export const PING_PONG_RATE = 5000;

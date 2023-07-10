@@ -30,6 +30,10 @@ export const doAction = {
         currentConnection,
         wrapResponse("update_room", dataProcessor.getPendingRooms()),
       ],
+      [
+        currentConnection,
+        wrapResponse("update_winners", dataProcessor.getWinners()),
+      ],
     ];
   },
   // update_room: (type: string, index: number) => {
@@ -45,14 +49,13 @@ export const doAction = {
   ): (WsMessage | UserConnections[])[][] => {
     dataProcessor.createRoom(index);
     connections.getUserById(index)[0].state = UserStates.inRoom;
+    console.log("CREATED ROOM: ", dataProcessor.getRooms());
     return [
       [
-        connections
-          .getAllConnections()
-          .filter(
-            (el) =>
-              el.state === UserStates.logged || el.state === UserStates.inRoom
-          ),
+        [
+          ...connections.getConnectionsByState(UserStates.logged),
+          ...connections.getConnectionsByState(UserStates.inRoom),
+        ],
         wrapResponse("update_room", dataProcessor.getPendingRooms()),
       ],
     ];
@@ -62,6 +65,7 @@ export const doAction = {
     index: number,
     data: MessageData
   ): (WsMessage | UserConnections[])[][] => {
+    // console.log('ADDING TO ROOM: ', data);
     if (
       dataProcessor
         .getRooms()
@@ -80,11 +84,38 @@ export const doAction = {
     roomConnections.forEach((el) =>
       connections.updateUserState(el.id, UserStates.inGame)
     );
+    // console.log('GET GAMES: ', JSON.stringify(dataProcessor.getGames()))
+    // console.log('GET ROOMS: ', JSON.stringify(dataProcessor.getRooms()))
+    dataProcessor
+      .getRooms()
+      .find((el) => el.roomId === (data as RoomIndex).indexRoom)!
+      .roomUsers.forEach((el) => {
+        const defectRoom = dataProcessor
+          .getRooms()
+          .find(
+            (room) =>
+              room.roomUsers.length === 1 &&
+              room.roomUsers[0].index === el.index
+          );
+        if (defectRoom) dataProcessor.removeRoom(defectRoom.roomId);
+      });
+    // dataProcessor
+    //   .getRooms()
+    //   .find((el) => el.roomId === (data as RoomIndex).indexRoom)!
+    //   .roomUsers.forEach((el) => {
+    //     const defectRoom = dataProcessor
+    //       .getGames()
+    //       .find(
+    //         (game) =>
+    //           game.idPlayer === el.index &&
+    //           game.idGame !== (data as RoomIndex).indexRoom
+    //       );
+    //     if (defectRoom !== undefined) dataProcessor.removeRoom(defectRoom.idGame);
+    //   });
+    console.log("PENDING ROOMS: ", dataProcessor.getPendingRooms());
     return [
       [
-        connections
-          .getAllConnections()
-          .filter((el) => el.state === UserStates.logged),
+        connections.getConnectionsByState(UserStates.logged),
         wrapResponse("update_room", dataProcessor.getPendingRooms()),
       ],
       ...roomConnections.map((el) => [
@@ -105,7 +136,7 @@ export const doAction = {
       .getRooms()
       .find(
         (el) =>
-          el.roomUsers.length &&
+          el.roomUsers.length === 2 &&
           (el.roomUsers[0].index === index || el.roomUsers[1].index === index)
       )!
       .roomUsers.map(
@@ -145,7 +176,7 @@ export const doAction = {
       .getRooms()
       .find(
         (el) =>
-          el.roomUsers.length &&
+          el.roomUsers.length === 2 &&
           (el.roomUsers[0].index === index || el.roomUsers[1].index === index)
       )!
       .roomUsers.map(
@@ -178,7 +209,7 @@ export const doAction = {
       .getRooms()
       .find(
         (el) =>
-          el.roomUsers.length &&
+          el.roomUsers.length === 2 &&
           (el.roomUsers[0].index === index || el.roomUsers[1].index === index)
       )!
       .roomUsers.map(
@@ -212,7 +243,7 @@ export const doAction = {
         .getRooms()
         .find(
           (el) =>
-            el.roomUsers.length &&
+            el.roomUsers.length === 2 &&
             (el.roomUsers[0].index === index || el.roomUsers[1].index === index)
         )!
         .roomUsers.map(
@@ -235,7 +266,7 @@ export const doAction = {
           (data as RandomAttack).indexPlayer
         );
         dataProcessor.addWinner(winnerName);
-        console.log("WINNER DATA: ", data);
+        // console.log("WINNER DATA: ", data);
         dataProcessor.clearGame(
           roomConnections[0].id,
           roomConnections[1].id,
@@ -252,7 +283,10 @@ export const doAction = {
             }),
           ],
           [
-            roomConnections,
+            [
+              ...connections.getConnectionsByState(UserStates.logged),
+              ...connections.getConnectionsByState(UserStates.inRoom),
+            ],
             wrapResponse("update_winners", dataProcessor.getWinners()),
           ],
           [

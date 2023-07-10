@@ -11,12 +11,17 @@ class ConnectionsController {
       ws: ws,
       id: this.clientsId,
       state: userState,
+      isAlive: true,
     });
     this.clientsId++;
   }
 
   updateUserState(id: number, state: UserStates) {
-    this.clientsConnections.find(el => el.id === id)!.state = state;
+    this.clientsConnections.find((el) => el.id === id)!.state = state;
+  }
+
+  updateConnectionState(id: number, state: boolean) {
+    this.clientsConnections.find((el) => el.id === id)!.isAlive = state;
   }
 
   getUserByConnection(ws: WebSocket): UserConnections {
@@ -29,6 +34,17 @@ class ConnectionsController {
 
   getAllConnections() {
     return this.clientsConnections;
+  }
+
+  getConnectionsByState(state: UserStates) {
+    return this.clientsConnections.filter((el) => (el.state = state));
+  }
+
+  removeConnection(id: number) {
+    this.clientsConnections.splice(
+      this.clientsConnections.findIndex((el) => el.id === id),
+      1
+    );
   }
 }
 
