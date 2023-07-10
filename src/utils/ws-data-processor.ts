@@ -53,20 +53,19 @@ class WebSocketDataProcessor {
     let errorMessage = "";
     if (data.name.length < 5)
       errorMessage = "You need minimum 5 characters for name";
-    if (data.password.length < 5)
-      errorMessage = "You need minimum 5 characters for password";
     if (data.name[0] !== data.name[0].toUpperCase())
-      errorMessage = "Start your name with catital letter";
+      errorMessage = "Start your name with capital letter";
     if (!data.password.match(pasReg))
-      errorMessage =
-        "Password error: min 8 characters, one letter and one number";
+      errorMessage = "Password error: min 8 characters, min 1 digit";
     const newUser = {
       name: data.name,
       index: index,
       error: Boolean(errorMessage),
       errorText: errorMessage,
     };
+    if (errorMessage.length) return newUser;
     this.usersData.push(newUser);
+    console.log(this.usersData);
     return this.getUser(newUser.name);
   }
 
