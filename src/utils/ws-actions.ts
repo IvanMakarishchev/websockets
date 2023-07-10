@@ -62,6 +62,13 @@ export const doAction = {
     index: number,
     data: MessageData
   ): (WsMessage | UserConnections[])[][] => {
+    if (
+      dataProcessor
+        .getRooms()
+        .find((el) => el.roomId === (data as RoomIndex).indexRoom)!
+        .roomUsers.findIndex((el) => el.index === index) >= 0
+    )
+      return [];
     dataProcessor.enterRoom(index, data as RoomIndex);
     const roomConnections = dataProcessor
       .getRooms()
@@ -231,9 +238,7 @@ export const doAction = {
           ],
           [
             roomConnections,
-            wrapResponse("update_winners", 
-              dataProcessor.getWinners(),
-            ),
+            wrapResponse("update_winners", dataProcessor.getWinners()),
           ],
         ];
       } else return [];

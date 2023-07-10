@@ -22,9 +22,9 @@ export class GameWebsocket {
         const parsedData = parsedMessage.data
           ? (JSON.parse(parsedMessage.data) as MessageData)
           : undefined;
-        // console.log("REQUEST TYPE: ", parsedMessage.type);
-        // console.log("REQUEST INDEX: ", index);
-        // console.log("REQUEST DATA: ", parsedData);
+        console.log("REQUEST TYPE: ", parsedMessage.type);
+        console.log("REQUEST INDEX: ", index);
+        console.log("REQUEST DATA: ", parsedData);
         const result = dataProcessor.processData(
           parsedMessage.type,
           index,
