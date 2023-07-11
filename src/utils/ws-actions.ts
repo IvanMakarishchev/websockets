@@ -62,6 +62,11 @@ export const doAction = {
     type: string,
     index: number
   ): (WsMessage | UserConnections[])[][] => {
+    let isInRoom = false;
+    dataProcessor.getRooms().forEach((el) => {
+      if (el.roomUsers.find((room) => room.index === index)) isInRoom = true;
+    });
+    if (isInRoom) return [];
     dataProcessor.createRoom(index);
     connections.updateUserState(index, UserStates.inRoom);
     console.log(
