@@ -40,6 +40,10 @@ class ConnectionsController {
     return this.clientsConnections.filter((el) => (el.state = state));
   }
 
+  getConnectionById(id: number) {
+    return this.clientsConnections.find((el) => (el.id === id));
+  }
+
   removeConnection(id: number) {
     this.clientsConnections.splice(
       this.clientsConnections.findIndex((el) => el.id === id),

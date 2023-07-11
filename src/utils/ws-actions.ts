@@ -13,28 +13,43 @@ import {
 import { wrapResponse } from "./response-wrapper";
 import { connections } from "./connections-controller";
 import { UserStates } from "../enums/enums";
+import { inspect } from "util";
 
 export const doAction = {
   reg: (type: string, index: number, data: MessageData) => {
-    connections.updateUserState(index, UserStates.logged);
     const currentConnection = connections.getUserById(index);
-    return [
-      [
-        currentConnection,
-        wrapResponse(
-          type,
-          dataProcessor.createNewUser(data as UserData, index)
-        ),
-      ],
-      [
-        currentConnection,
-        wrapResponse("update_room", dataProcessor.getPendingRooms()),
-      ],
-      [
-        currentConnection,
-        wrapResponse("update_winners", dataProcessor.getWinners()),
-      ],
-    ];
+    const regResult = dataProcessor.createNewUser(data as UserData, index);
+    if (regResult.error) {
+      return [
+        [
+          currentConnection,
+          wrapResponse(type, {
+            ...regResult,
+            errorText: "",
+          }),
+        ],
+        [currentConnection, wrapResponse(type, regResult)],
+      ];
+    } else {
+      connections.updateUserState(index, UserStates.logged);
+      console.log(
+        "USER ID: ",
+        index,
+        "USER STATE:",
+        connections.getAllConnections().find((el) => el.id === index)?.state //<<<<<<<<<<<<<
+      );
+      return [
+        [currentConnection, wrapResponse(type, regResult)],
+        [
+          currentConnection,
+          wrapResponse("update_room", dataProcessor.getPendingRooms()),
+        ],
+        [
+          currentConnection,
+          wrapResponse("update_winners", dataProcessor.getWinners()),
+        ],
+      ];
+    }
   },
   // update_room: (type: string, index: number) => {
   //   const currentConnection = connections.getUserById(index);
@@ -48,8 +63,14 @@ export const doAction = {
     index: number
   ): (WsMessage | UserConnections[])[][] => {
     dataProcessor.createRoom(index);
-    connections.getUserById(index)[0].state = UserStates.inRoom;
-    console.log("CREATED ROOM: ", dataProcessor.getRooms());
+    connections.updateUserState(index, UserStates.inRoom);
+    console.log(
+      "USER ID: ",
+      index,
+      "USER STATE:",
+      connections.getAllConnections().find((el) => el.id === index)?.state //<<<<<<<<<<<<<
+    );
+    // console.log("CREATED ROOM: ", dataProcessor.getRooms());
     return [
       [
         [
@@ -81,9 +102,6 @@ export const doAction = {
         (user) =>
           connections.getAllConnections().find((el) => el.id === user.index)!
       );
-    roomConnections.forEach((el) =>
-      connections.updateUserState(el.id, UserStates.inGame)
-    );
     // console.log('GET GAMES: ', JSON.stringify(dataProcessor.getGames()))
     // console.log('GET ROOMS: ', JSON.stringify(dataProcessor.getRooms()))
     dataProcessor
@@ -99,38 +117,36 @@ export const doAction = {
           );
         if (defectRoom) dataProcessor.removeRoom(defectRoom.roomId);
       });
-    // dataProcessor
-    //   .getRooms()
-    //   .find((el) => el.roomId === (data as RoomIndex).indexRoom)!
-    //   .roomUsers.forEach((el) => {
-    //     const defectRoom = dataProcessor
-    //       .getGames()
-    //       .find(
-    //         (game) =>
-    //           game.idPlayer === el.index &&
-    //           game.idGame !== (data as RoomIndex).indexRoom
-    //       );
-    //     if (defectRoom !== undefined) dataProcessor.removeRoom(defectRoom.idGame);
-    //   });
-    console.log("PENDING ROOMS: ", dataProcessor.getPendingRooms());
+    // roomConnections.map((el) => {
+    //   connections.updateUserState(el.id, UserStates.inPrepare);
+    //   return { ...el, state: UserStates.inPrepare };
+    // });
+    roomConnections.forEach((el) =>
+      console.log("ISED ID: ", el.id, " STATE: ", UserStates[el.state])
+    ); //<<<<<<<<<<<<<
     return [
       [
         connections.getConnectionsByState(UserStates.logged),
         wrapResponse("update_room", dataProcessor.getPendingRooms()),
       ],
-      ...roomConnections.map((el) => [
-        [el],
-        wrapResponse(
-          "create_game",
-          dataProcessor.createGame(el.id, data as RoomIndex)
-        ),
-      ]),
+      ...roomConnections
+        .map((el) => {
+          connections.updateUserState(el.id, UserStates.inPrepare);
+          return { ...el, state: UserStates.inPrepare };
+        })
+        .map((el) => [
+          [el],
+          wrapResponse(
+            "create_game",
+            dataProcessor.createGame(el.id, data as RoomIndex)
+          ),
+        ]),
     ];
   },
   add_ships: (type: string, index: number, data: MessageData) => {
     const shipsData = data as Ships;
-    console.log("SHIPS DATA: ", data);
-    console.log("GET ROOMS: %s", JSON.stringify(dataProcessor.getRooms()));
+    // console.log("SHIPS DATA: ", data);
+    // console.log("GET ROOMS: %s", JSON.stringify(dataProcessor.getRooms()));
     dataProcessor.addShips(shipsData);
     const roomConnections = dataProcessor
       .getRooms()
@@ -147,6 +163,13 @@ export const doAction = {
       .getShipsData()
       .filter((el) => el.gameId === shipsData.gameId);
     if (isReady.length > 1) {
+      console.log(roomConnections);
+      roomConnections.forEach((el) =>
+        connections.updateUserState(el.id, UserStates.inGame)
+      );
+      roomConnections.forEach((el) =>
+        console.log("ISED ID: ", el.id, " STATE: ", el.state)
+      ); //<<<<<<<<<<<<<
       return [
         [
           roomConnections,
@@ -275,6 +298,9 @@ export const doAction = {
         roomConnections.forEach((el) =>
           connections.updateUserState(el.id, UserStates.logged)
         );
+        roomConnections.forEach((el) =>
+          console.log("ISED ID: ", el.id, " STATE: ", el.state)
+        ); //<<<<<<<<<<<<<
         return [
           [
             roomConnections,

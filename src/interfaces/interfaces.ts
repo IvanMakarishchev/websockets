@@ -10,6 +10,7 @@ export interface WsMessage {
 export interface UserData {
   name: string;
   password: string;
+  index: number;
 }
 export interface UserByConnection {
   name: string;

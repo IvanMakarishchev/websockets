@@ -20,6 +20,8 @@ import { doAction } from "./ws-actions";
 import { fillSectors } from "./fill-around";
 import { connections } from "./connections-controller";
 import { pasReg } from "../constants/constants";
+import { UserStates } from "../enums/enums";
+import { wrapResponse } from "./response-wrapper";
 
 class WebSocketDataProcessor {
   private usersData: NewUser[] = [];
@@ -51,21 +53,25 @@ class WebSocketDataProcessor {
 
   createNewUser(data: UserData, index: number): NewUser {
     let errorMessage = "";
-    if (data.name.length < 5)
-      errorMessage = "You need minimum 5 characters for name";
-    if (data.name[0] !== data.name[0].toUpperCase())
-      errorMessage = "Start your name with capital letter";
-    if (!data.password.match(pasReg))
-      errorMessage = "Password error: min 8 characters, min 1 digit";
+    // if (data.name.length < 5 && !errorMessage.length)
+    //   errorMessage = "You need minimum 5 characters for name";
+    // if (data.name[0] !== data.name[0].toUpperCase() && !errorMessage.length)
+    //   errorMessage = "Start your name with capital letter";
+    // if (
+    //   this.usersData.find((el) => el.name === data.name) &&
+    //   !errorMessage.length
+    // )
+    //   errorMessage = `User with name ${data.name} already exists`;
+    // if (!data.password.match(pasReg) && !errorMessage.length)
+    //   errorMessage = "Password error: min 8 characters, min 1 digit";
     const newUser = {
       name: data.name,
       index: index,
-      error: Boolean(errorMessage),
+      error: Boolean(errorMessage.length),
       errorText: errorMessage,
     };
-    if (errorMessage.length) return newUser;
+    if (newUser.error) return newUser;
     this.usersData.push(newUser);
-    console.log(this.usersData);
     return this.getUser(newUser.name);
   }
 
@@ -80,6 +86,7 @@ class WebSocketDataProcessor {
       ],
     };
     this.roomsData.push(newRoom);
+    console.log("USER CONNECTION: ", connections.getConnectionById(index));
   }
 
   enterRoom(userId: number, roomId: RoomIndex) {
@@ -158,10 +165,6 @@ class WebSocketDataProcessor {
     const gameId = this.gamesData.find((el) => el.idPlayer)!.idGame;
     const gameIndex = this.usersTurns.findIndex((el) => el.gameID === gameId)!;
     let isAvailableSector = false;
-    // console.log(`GAME ID: ${gameId}`);
-    // console.log(`GAMES DATA: ${this.gamesData}`);
-    // console.log(`GAME INDEX: ${gameIndex}`);
-    // console.log(`USERS TURNS: ${JSON.stringify(this.usersTurns)}`);
     let isPlayerTurn = data.indexPlayer === this.usersTurns[gameIndex].turn[0];
     const userAvailableHits = this.availableHits.find(
       (el) => el.indexPlayer === data.indexPlayer
@@ -370,15 +373,151 @@ class WebSocketDataProcessor {
       this.availableHits.findIndex((el) => el.indexPlayer === pTwoId),
       1
     );
-    console.log("usersData DATA: ", this.usersData);
-    console.log("roomsData DATA: ", this.roomsData);
-    console.log("gamesData DATA: ", this.gamesData);
-    console.log("shipsCoords DATA: ", this.shipsCoords);
-    console.log("shipsData DATA: ", this.shipsData);
-    console.log("usersHits DATA: ", this.usersHits);
-    console.log("availableHits DATA: ", this.availableHits);
-    console.log("usersTurns DATA: ", this.usersTurns);
-    console.log("winnersData DATA: ", this.winnersData);
+    // console.log("usersData DATA: ", this.usersData);
+    // console.log("roomsData DATA: -", this.roomsData);
+    // console.log("gamesData DATA: ", this.gamesData);
+    // console.log("shipsCoords DATA: ", this.shipsCoords);
+    // console.log("shipsData DATA: ", this.shipsData);
+    // console.log("usersHits DATA: ", this.usersHits);
+    // console.log("availableHits DATA: ", this.availableHits);
+    // console.log("usersTurns DATA: ", this.usersTurns);
+    // console.log("winnersData DATA: ", this.winnersData);
+  }
+
+  onTerminate(id: number, state: UserStates) {
+    const response = [];
+    console.log("STATUS: ", state);
+    if (state > UserStates.unlogged) {
+      this.usersData.splice(
+        this.usersData.findIndex((el) => el.index === id),
+        1
+      );
+    }
+    if (state > UserStates.logged) {
+      let userRoom: number | undefined = undefined;
+      this.roomsData.forEach((room, index) => {
+        if (room.roomUsers.find((el) => el.index === id)) userRoom = index;
+      });
+      if (userRoom !== undefined) this.roomsData.splice(userRoom, 1);
+      response.push([
+        [
+          ...connections.getConnectionsByState(UserStates.logged),
+          ...connections.getConnectionsByState(UserStates.inRoom),
+        ],
+        wrapResponse("update_room", this.getPendingRooms()),
+      ]);
+    }
+    if (state === UserStates.inPrepare) {
+      const userRoom = this.gamesData.find((el) => el.idPlayer === id)!.idGame;
+      const enemyId = this.gamesData.find((el) => el.idPlayer !== id)!.idPlayer;
+      const enemyConnection = connections.getUserById(enemyId);
+      connections.updateUserState(enemyId, UserStates.logged);
+      response.push(
+        [
+          enemyConnection,
+          wrapResponse(
+            "reg",
+            this.usersData.find((el) => el.index === enemyId)!
+          ),
+        ],
+        [enemyConnection, wrapResponse("update_room", this.getPendingRooms())]
+      );
+      this.gamesData = [
+        ...this.gamesData.filter((el) => el.idGame !== userRoom),
+      ];
+    }
+    if (state > UserStates.inPrepare) {
+      const gameID = this.shipsCoords.find(
+        (el) => el.indexPlayer === id
+      )!.gameId;
+      const enemyID = this.shipsCoords.find(
+        (el) => el.gameId === gameID && el.indexPlayer !== id
+      )!.indexPlayer;
+      console.log("ENEMY ID: ", enemyID);
+      ///////////////////////////////////////////////////////////////////////
+      this.shipsCoords = [
+        ...this.shipsCoords.filter((el) => el.gameId !== gameID),
+      ];
+      this.shipsData = [...this.shipsData.filter((el) => el.gameId !== gameID)];
+      this.usersTurns = [
+        ...this.usersTurns.filter((el) => el.gameID !== gameID),
+      ];
+      this.usersHits = [
+        ...this.usersHits.filter(
+          (el) => el.indexPlayer !== id && el.indexPlayer !== enemyID
+        ),
+      ];
+      this.availableHits = [
+        ...this.availableHits.filter(
+          (el) => el.indexPlayer !== id && el.indexPlayer !== enemyID
+        ),
+      ];
+      const winnerName = this.getUserNameByIndex(enemyID!);
+      dataProcessor.addWinner(winnerName);
+      response.unshift(
+        [
+          [connections.getConnectionById(enemyID!)!],
+          wrapResponse("finish", {
+            winPlayer: enemyID!,
+          }),
+        ],
+        [
+          [
+            ...connections.getConnectionsByState(UserStates.logged),
+            ...connections.getConnectionsByState(UserStates.inRoom),
+          ],
+          wrapResponse("update_winners", dataProcessor.getWinners()),
+        ]
+      );
+    }
+    // console.log("usersData DATA: ", this.usersData);
+    // console.log("roomsData DATA: ", this.roomsData);
+    // console.log("gamesData DATA: ", this.gamesData);
+    // console.log("shipsCoords DATA: ", this.shipsCoords);
+    // console.log("shipsData DATA: ", this.shipsData);
+    // console.log("usersHits DATA: ", this.usersHits);
+    // console.log("availableHits DATA: ", this.availableHits);
+    // console.log("usersTurns DATA: ", this.usersTurns);
+    // console.log("winnersData DATA: ", this.winnersData);
+    return response;
+    // const roomId = this.roomsData.findIndex((el) =>
+    //   el.roomUsers.find((user) => user.index === id)
+    // );
+    // console.log(roomId);
+    // console.log("ROOMS DATA: ", this.roomsData[roomId]);
+    // if (this.roomsData[roomId].roomUsers.length === 2) {
+    //   const enemyCon = connections.getConnectionById(
+    //     this.roomsData[roomId].roomUsers.find((el) => el.index !== id)!.index // <----------------ERROR
+    //   )!;
+    //   if (enemyCon!.state > UserStates.inRoom) {
+    //     console.log("IN GAME");
+    //   } else console.log("IN ROOM");
+    // }
+    // this.roomsData.splice(
+    //   this.roomsData.findIndex((el) => el.roomId === id),
+    //   1
+    // );
+
+    // this.gamesData.splice(
+    //   this.gamesData.findIndex((el) => el.idPlayer === id),
+    //   1
+    // );
+    // this.shipsCoords.splice(
+    //   this.shipsCoords.findIndex((el) => el.indexPlayer === id),
+    //   1
+    // );
+    // this.shipsData.splice(
+    //   this.shipsData.findIndex((el) => el.indexPlayer === id),
+    //   1
+    // );
+    // this.usersHits.splice(
+    //   this.usersHits.findIndex((el) => el.indexPlayer === id),
+    //   1
+    // );
+    // this.availableHits.splice(
+    //   this.availableHits.findIndex((el) => el.indexPlayer === id),
+    //   1
+    // );
   }
 }
 

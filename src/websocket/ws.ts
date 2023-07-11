@@ -17,20 +17,19 @@ export class GameWebsocket {
     this.websocket.on("connection", (ws) => {
       connections.addUserConnection(ws, UserStates.unlogged);
       const index = connections.getUserByConnection(ws)!.id;
-      ws.on(
-        "pong",
-        () => connections.updateConnectionState(index, true)
-      );
+      console.log(connections.getConnectionById(0));
+      ws.on("pong", () => connections.updateConnectionState(index, true));
       ws.on("error", console.error);
       ws.on("message", (data) => {
+        // console.log(JSON.parse(data.toString()));
         const parsedMessage = JSON.parse(data.toString()) as WsMessage;
         const parsedData = parsedMessage.data
           ? (JSON.parse(parsedMessage.data) as MessageData)
           : undefined;
         console.log("————————————————————————————————————————————————————————");
-        console.log("REQUEST TYPE: ", parsedMessage.type);
-        console.log("REQUEST INDEX: ", index);
-        console.log("REQUEST DATA: ", parsedData);
+        // console.log("REQUEST TYPE: ", parsedMessage.type);
+        // console.log("REQUEST INDEX: ", index);
+        // console.log("REQUEST DATA: ", parsedData);
         const result = dataProcessor.processData(
           parsedMessage.type,
           index,
@@ -45,12 +44,20 @@ export class GameWebsocket {
     });
     const interval = setInterval(() => {
       connections.getAllConnections().forEach((con) => {
+        console.log("USER ID: ", con.id, " : ", UserStates[con.state]);
         if (!con.isAlive) {
           console.log(con.id, " : CONNECTION TERMINATED");
+          dataProcessor.onTerminate(con.id, con.state).forEach((mes) => {
+            console.log(mes);
+            (mes[0] as UserConnections[]).forEach((el) => {
+              el.ws.send(JSON.stringify(mes[1]));
+            });
+          });
+
           connections.removeConnection(con.id);
           return con.ws.terminate();
         }
-        console.log(con.id, ' : ', con.isAlive);
+        // console.log(con.id, ' : ', con.isAlive);
         connections.updateConnectionState(con.id, false);
         con.ws.ping();
       });
