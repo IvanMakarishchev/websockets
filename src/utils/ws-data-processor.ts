@@ -22,6 +22,7 @@ import { connections } from "./connections-controller";
 import { pasReg } from "../constants/constants";
 import { UserStates } from "../enums/enums";
 import { wrapResponse } from "./response-wrapper";
+import { generatePositions } from "./position-generator";
 
 class WebSocketDataProcessor {
   private usersData: NewUser[] = [];
@@ -53,17 +54,6 @@ class WebSocketDataProcessor {
 
   createNewUser(data: UserData, index: number): NewUser {
     let errorMessage = "";
-    // if (data.name.length < 5 && !errorMessage.length)
-    //   errorMessage = "You need minimum 5 characters for name";
-    // if (data.name[0] !== data.name[0].toUpperCase() && !errorMessage.length)
-    //   errorMessage = "Start your name with capital letter";
-    // if (
-    //   this.usersData.find((el) => el.name === data.name) &&
-    //   !errorMessage.length
-    // )
-    //   errorMessage = `User with name ${data.name} already exists`;
-    // if (!data.password.match(pasReg) && !errorMessage.length)
-    //   errorMessage = "Password error: min 8 characters, min 1 digit";
     const newUser = {
       name: data.name,
       index: index,
@@ -77,16 +67,23 @@ class WebSocketDataProcessor {
 
   createRoom(index: number) {
     const newRoom = {
-      roomId: Date.now(),
+      roomId: index >= 0 ? Date.now() : index,
       roomUsers: [
         {
-          name: this.getUserNameByIndex(index),
+          name: index >= 0 ? this.getUserNameByIndex(index) : "BOT",
           index: index,
         },
       ],
     };
+    if (index < 0)
+      newRoom.roomUsers = [
+        ...newRoom.roomUsers,
+        {
+          name: this.getUserNameByIndex(-index),
+          index: -index,
+        },
+      ];
     this.roomsData.push(newRoom);
-    console.log("USER CONNECTION: ", connections.getConnectionById(index));
   }
 
   enterRoom(userId: number, roomId: RoomIndex) {
@@ -126,26 +123,35 @@ class WebSocketDataProcessor {
   }
 
   addShips(data: Ships) {
-    const updatedShips = {
-      ...data,
-      ships: (data.ships as RawShips[]).map(
-        (el) =>
-          (el.position = [
-            JSON.parse(
-              `[${JSON.stringify(el.position)
-                .repeat(el.length)
-                .replaceAll("}{", "},{")}]`
-            ).map((pos: RawPosition, i: number) =>
-              el.direction
-                ? { x: pos.x, y: pos.y + i }
-                : { x: pos.x + i, y: pos.y }
-            ),
-            [],
-          ])
-      ),
-    };
-    this.shipsCoords.push(updatedShips);
-    this.shipsData.push(data);
+    let updatedShips;
+    if (data.indexPlayer! >= 0) {
+      updatedShips = {
+        ...data,
+        ships: (data.ships as RawShips[]).map(
+          (el) =>
+            (el.position = [
+              JSON.parse(
+                `[${JSON.stringify(el.position)
+                  .repeat(el.length)
+                  .replaceAll("}{", "},{")}]`
+              ).map((pos: RawPosition, i: number) =>
+                el.direction
+                  ? { x: pos.x, y: pos.y + i }
+                  : { x: pos.x + i, y: pos.y }
+              ),
+              [],
+            ])
+        ),
+      };
+    }
+    if (data.indexPlayer! < 0) {
+      updatedShips = {
+        ...data,
+        ships: generatePositions(),
+      };
+    }
+    this.shipsCoords.push(updatedShips as Ships);
+    this.shipsData.push(data)
     this.usersHits.push({ indexPlayer: data.indexPlayer!, hits: [] });
     this.availableHits = [
       ...this.availableHits,
@@ -258,18 +264,12 @@ class WebSocketDataProcessor {
         number[]
       >
     );
-    // console.log(
-    //   `User: ${index}, Hits array length: ${userAvailableHits.length}`
-    // );
     const randomCords = Math.round(
       Math.random() *
         (userAvailableHits.length > 0
           ? Math.abs(userAvailableHits.length - 1)
           : 0)
     );
-    // console.log("Hits: %s", userAvailableHits);
-    // console.log("AWAILABLE HITS LENGTH: ", userAvailableHits.length);
-    // console.log("RANDOM CORDS: ", randomCords);
     return {
       gameID: (data as RandomAttack).gameID,
       x: userAvailableHits[randomCords][0],
@@ -373,20 +373,11 @@ class WebSocketDataProcessor {
       this.availableHits.findIndex((el) => el.indexPlayer === pTwoId),
       1
     );
-    // console.log("usersData DATA: ", this.usersData);
-    // console.log("roomsData DATA: -", this.roomsData);
-    // console.log("gamesData DATA: ", this.gamesData);
-    // console.log("shipsCoords DATA: ", this.shipsCoords);
-    // console.log("shipsData DATA: ", this.shipsData);
-    // console.log("usersHits DATA: ", this.usersHits);
-    // console.log("availableHits DATA: ", this.availableHits);
-    // console.log("usersTurns DATA: ", this.usersTurns);
-    // console.log("winnersData DATA: ", this.winnersData);
   }
 
   onTerminate(id: number, state: UserStates) {
+    if (id < 0) return [];
     const response = [];
-    console.log("STATUS: ", state);
     if (state > UserStates.unlogged) {
       this.usersData.splice(
         this.usersData.findIndex((el) => el.index === id),
@@ -409,22 +400,26 @@ class WebSocketDataProcessor {
     }
     if (state === UserStates.inPrepare) {
       const userRoom = this.gamesData.find((el) => el.idPlayer === id)!.idGame;
-      const enemyId = this.gamesData.find((el) => el.idPlayer !== id)!.idPlayer;
-      const enemyConnection = connections.getUserById(enemyId);
-      connections.updateUserState(enemyId, UserStates.logged);
-      response.push(
-        [
-          enemyConnection,
-          wrapResponse(
-            "reg",
-            this.usersData.find((el) => el.index === enemyId)!
-          ),
-        ],
-        [enemyConnection, wrapResponse("update_room", this.getPendingRooms())]
-      );
-      this.gamesData = [
-        ...this.gamesData.filter((el) => el.idGame !== userRoom),
-      ];
+      if (userRoom >= 0) {
+        const enemyId = this.gamesData.find(
+          (el) => el.idPlayer !== id
+        )!.idPlayer;
+        const enemyConnection = connections.getUserById(enemyId);
+        connections.updateUserState(enemyId, UserStates.logged);
+        response.push(
+          [
+            enemyConnection,
+            wrapResponse(
+              "reg",
+              this.usersData.find((el) => el.index === enemyId)!
+            ),
+          ],
+          [enemyConnection, wrapResponse("update_room", this.getPendingRooms())]
+        );
+        this.gamesData = [
+          ...this.gamesData.filter((el) => el.idGame !== userRoom),
+        ];
+      }
     }
     if (state > UserStates.inPrepare) {
       const gameID = this.shipsCoords.find(
@@ -433,8 +428,6 @@ class WebSocketDataProcessor {
       const enemyID = this.shipsCoords.find(
         (el) => el.gameId === gameID && el.indexPlayer !== id
       )!.indexPlayer;
-      console.log("ENEMY ID: ", enemyID);
-      ///////////////////////////////////////////////////////////////////////
       this.shipsCoords = [
         ...this.shipsCoords.filter((el) => el.gameId !== gameID),
       ];
@@ -452,72 +445,27 @@ class WebSocketDataProcessor {
           (el) => el.indexPlayer !== id && el.indexPlayer !== enemyID
         ),
       ];
-      const winnerName = this.getUserNameByIndex(enemyID!);
-      dataProcessor.addWinner(winnerName);
-      response.unshift(
-        [
-          [connections.getConnectionById(enemyID!)!],
-          wrapResponse("finish", {
-            winPlayer: enemyID!,
-          }),
-        ],
-        [
+      if (gameID! >= 0) {
+        const winnerName = this.getUserNameByIndex(enemyID!);
+        dataProcessor.addWinner(winnerName);
+        response.unshift(
           [
-            ...connections.getConnectionsByState(UserStates.logged),
-            ...connections.getConnectionsByState(UserStates.inRoom),
+            [connections.getConnectionById(enemyID!)!],
+            wrapResponse("finish", {
+              winPlayer: enemyID!,
+            }),
           ],
-          wrapResponse("update_winners", dataProcessor.getWinners()),
-        ]
-      );
+          [
+            [
+              ...connections.getConnectionsByState(UserStates.logged),
+              ...connections.getConnectionsByState(UserStates.inRoom),
+            ],
+            wrapResponse("update_winners", dataProcessor.getWinners()),
+          ]
+        );
+      }
     }
-    // console.log("usersData DATA: ", this.usersData);
-    // console.log("roomsData DATA: ", this.roomsData);
-    // console.log("gamesData DATA: ", this.gamesData);
-    // console.log("shipsCoords DATA: ", this.shipsCoords);
-    // console.log("shipsData DATA: ", this.shipsData);
-    // console.log("usersHits DATA: ", this.usersHits);
-    // console.log("availableHits DATA: ", this.availableHits);
-    // console.log("usersTurns DATA: ", this.usersTurns);
-    // console.log("winnersData DATA: ", this.winnersData);
     return response;
-    // const roomId = this.roomsData.findIndex((el) =>
-    //   el.roomUsers.find((user) => user.index === id)
-    // );
-    // console.log(roomId);
-    // console.log("ROOMS DATA: ", this.roomsData[roomId]);
-    // if (this.roomsData[roomId].roomUsers.length === 2) {
-    //   const enemyCon = connections.getConnectionById(
-    //     this.roomsData[roomId].roomUsers.find((el) => el.index !== id)!.index // <----------------ERROR
-    //   )!;
-    //   if (enemyCon!.state > UserStates.inRoom) {
-    //     console.log("IN GAME");
-    //   } else console.log("IN ROOM");
-    // }
-    // this.roomsData.splice(
-    //   this.roomsData.findIndex((el) => el.roomId === id),
-    //   1
-    // );
-
-    // this.gamesData.splice(
-    //   this.gamesData.findIndex((el) => el.idPlayer === id),
-    //   1
-    // );
-    // this.shipsCoords.splice(
-    //   this.shipsCoords.findIndex((el) => el.indexPlayer === id),
-    //   1
-    // );
-    // this.shipsData.splice(
-    //   this.shipsData.findIndex((el) => el.indexPlayer === id),
-    //   1
-    // );
-    // this.usersHits.splice(
-    //   this.usersHits.findIndex((el) => el.indexPlayer === id),
-    //   1
-    // );
-    // this.availableHits.splice(
-    //   this.availableHits.findIndex((el) => el.indexPlayer === id),
-    //   1
-    // );
   }
 }
 

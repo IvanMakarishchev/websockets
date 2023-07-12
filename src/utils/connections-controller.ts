@@ -9,11 +9,10 @@ class ConnectionsController {
   addUserConnection(ws: WebSocket, userState: UserStates) {
     this.clientsConnections.push({
       ws: ws,
-      id: this.clientsId,
+      id: Date.now(),
       state: userState,
       isAlive: true,
     });
-    this.clientsId++;
   }
 
   updateUserState(id: number, state: UserStates) {

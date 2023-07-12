@@ -13,7 +13,6 @@ import {
 import { wrapResponse } from "./response-wrapper";
 import { connections } from "./connections-controller";
 import { UserStates } from "../enums/enums";
-import { inspect } from "util";
 
 export const doAction = {
   reg: (type: string, index: number, data: MessageData) => {
@@ -32,12 +31,6 @@ export const doAction = {
       ];
     } else {
       connections.updateUserState(index, UserStates.logged);
-      console.log(
-        "USER ID: ",
-        index,
-        "USER STATE:",
-        connections.getAllConnections().find((el) => el.id === index)?.state //<<<<<<<<<<<<<
-      );
       return [
         [currentConnection, wrapResponse(type, regResult)],
         [
@@ -51,13 +44,6 @@ export const doAction = {
       ];
     }
   },
-  // update_room: (type: string, index: number) => {
-  //   const currentConnection = connections.getUserById(index);
-  //   console.log("CURRENT CONNECTION: ", currentConnection);
-  //   return [
-  //     [currentConnection, wrapResponse(type, dataProcessor.getPendingRooms())],
-  //   ];
-  // },
   create_room: (
     type: string,
     index: number
@@ -69,13 +55,6 @@ export const doAction = {
     if (isInRoom) return [];
     dataProcessor.createRoom(index);
     connections.updateUserState(index, UserStates.inRoom);
-    console.log(
-      "USER ID: ",
-      index,
-      "USER STATE:",
-      connections.getAllConnections().find((el) => el.id === index)?.state //<<<<<<<<<<<<<
-    );
-    // console.log("CREATED ROOM: ", dataProcessor.getRooms());
     return [
       [
         [
@@ -91,7 +70,6 @@ export const doAction = {
     index: number,
     data: MessageData
   ): (WsMessage | UserConnections[])[][] => {
-    // console.log('ADDING TO ROOM: ', data);
     if (
       dataProcessor
         .getRooms()
@@ -107,8 +85,6 @@ export const doAction = {
         (user) =>
           connections.getAllConnections().find((el) => el.id === user.index)!
       );
-    // console.log('GET GAMES: ', JSON.stringify(dataProcessor.getGames()))
-    // console.log('GET ROOMS: ', JSON.stringify(dataProcessor.getRooms()))
     dataProcessor
       .getRooms()
       .find((el) => el.roomId === (data as RoomIndex).indexRoom)!
@@ -122,13 +98,6 @@ export const doAction = {
           );
         if (defectRoom) dataProcessor.removeRoom(defectRoom.roomId);
       });
-    // roomConnections.map((el) => {
-    //   connections.updateUserState(el.id, UserStates.inPrepare);
-    //   return { ...el, state: UserStates.inPrepare };
-    // });
-    roomConnections.forEach((el) =>
-      console.log("ISED ID: ", el.id, " STATE: ", UserStates[el.state])
-    ); //<<<<<<<<<<<<<
     return [
       [
         connections.getConnectionsByState(UserStates.logged),
@@ -150,8 +119,6 @@ export const doAction = {
   },
   add_ships: (type: string, index: number, data: MessageData) => {
     const shipsData = data as Ships;
-    // console.log("SHIPS DATA: ", data);
-    // console.log("GET ROOMS: %s", JSON.stringify(dataProcessor.getRooms()));
     dataProcessor.addShips(shipsData);
     const roomConnections = dataProcessor
       .getRooms()
@@ -164,17 +131,14 @@ export const doAction = {
         (user) =>
           connections.getAllConnections().find((el) => el.id === user.index)!
       );
+    console.log(roomConnections);
     const isReady = dataProcessor
       .getShipsData()
       .filter((el) => el.gameId === shipsData.gameId);
     if (isReady.length > 1) {
-      console.log(roomConnections);
-      roomConnections.forEach((el) =>
-        connections.updateUserState(el.id, UserStates.inGame)
-      );
-      roomConnections.forEach((el) =>
-        console.log("ISED ID: ", el.id, " STATE: ", el.state)
-      ); //<<<<<<<<<<<<<
+      roomConnections
+        .filter((el) => el !== undefined)
+        .forEach((el) => connections.updateUserState(el.id, UserStates.inGame));
       return [
         [
           roomConnections,
@@ -200,7 +164,7 @@ export const doAction = {
     }
   },
   attack: (type: string, index: number, data: MessageData) => {
-    const roomConnections = dataProcessor
+    let roomConnections = dataProcessor
       .getRooms()
       .find(
         (el) =>
@@ -211,25 +175,57 @@ export const doAction = {
         (user) =>
           connections.getAllConnections().find((el) => el.id === user.index)!
       );
+    roomConnections = roomConnections.filter((el) => el);
+    const isBotGame = roomConnections.length === 2 ? false : true;
     const attackResult = dataProcessor.attackResult(
       data as Attack
     ) as AttackResult[];
     const gameId = dataProcessor
       .getGames()
       .find((el) => el.idPlayer === (data as Attack).indexPlayer)!.idGame;
+    let botResolve: (UserConnections[] | WsMessage)[][] = [];
+    if (isBotGame) {
+      let botAttack: AttackResult[] = [];
+      let botTurn: (UserConnections[] | WsMessage)[] = [];
+      console.log(index, " : ", data);
+      const botData: MessageData = {
+        x: 0,
+        y: 0,
+        gameID: -index,
+        indexPlayer: -index,
+      };
+      botAttack = dataProcessor.attackResult(
+        dataProcessor.getRandomData(-index, botData)
+      ) as AttackResult[];
+      console.log("BOT ATTACK: ", botAttack);
+      botTurn = [
+        roomConnections,
+        wrapResponse("turn", {
+          currentPlayer: dataProcessor.getTurn(gameId),
+        }),
+      ];
+      botResolve = [
+        [roomConnections, wrapResponse("attack", botAttack[0])],
+        botTurn,
+      ];
+    }
     return [
       ...attackResult.map((res) =>
         !("userId" in res)
-          ? [roomConnections, wrapResponse("attack", res)]
+          ? [
+              roomConnections.filter((el) => el !== undefined),
+              wrapResponse("attack", res),
+            ]
           : [
               roomConnections.filter((el) => el.id === res.userId)!,
               wrapResponse("attack", res),
             ]
       ),
       [
-        roomConnections,
+        roomConnections.filter((el) => el !== undefined),
         wrapResponse("turn", { currentPlayer: dataProcessor.getTurn(gameId) }),
       ],
+      ...botResolve,
     ];
   },
   randomAttack: (type: string, index: number, data: MessageData) => {
@@ -265,6 +261,23 @@ export const doAction = {
       ],
     ];
   },
+  single_play: (type: string, index: number) => {
+    const currentConnection = connections.getConnectionById(index)!;
+    dataProcessor.createRoom(-index);
+    dataProcessor.createGame(-index, { indexRoom: -index });
+    connections.updateUserState(index, UserStates.inPrepare);
+    dataProcessor.addShips({ gameId: -index, indexPlayer: -index, ships: [] });
+    dataProcessor.playerTurn(index, -index, -index);
+    return [
+      [
+        [currentConnection],
+        wrapResponse(
+          "create_game",
+          dataProcessor.createGame(index, { indexRoom: -index })
+        ),
+      ],
+    ];
+  },
   is_winner: (type: string, index: number, data: MessageData) => {
     if (type === "attack" || type === "randomAttack") {
       const roomConnections = dataProcessor
@@ -294,21 +307,26 @@ export const doAction = {
           (data as RandomAttack).indexPlayer
         );
         dataProcessor.addWinner(winnerName);
-        // console.log("WINNER DATA: ", data);
-        dataProcessor.clearGame(
-          roomConnections[0].id,
-          roomConnections[1].id,
-          (data as RandomAttack).gameId!
-        );
-        roomConnections.forEach((el) =>
-          connections.updateUserState(el.id, UserStates.logged)
-        );
-        roomConnections.forEach((el) =>
-          console.log("ISED ID: ", el.id, " STATE: ", el.state)
-        ); //<<<<<<<<<<<<<
+        console.log(roomConnections);
+        roomConnections.filter(el => el).length === 2
+          ? dataProcessor.clearGame(
+              roomConnections[0].id,
+              roomConnections[1].id,
+              (data as RandomAttack).gameId!
+            )
+          : dataProcessor.clearGame(
+              roomConnections.filter(el => el)[0].id,
+              -roomConnections.filter(el => el)[0].id,
+              (data as RandomAttack).gameId!
+            );
+        roomConnections
+          .filter((el) => el)
+          .forEach((el) =>
+            connections.updateUserState(el.id, UserStates.logged)
+          );
         return [
           [
-            roomConnections,
+            roomConnections.filter(el => el),
             wrapResponse("finish", {
               winPlayer: (data as RandomAttack).indexPlayer,
             }),
@@ -321,7 +339,7 @@ export const doAction = {
             wrapResponse("update_winners", dataProcessor.getWinners()),
           ],
           [
-            roomConnections,
+            roomConnections.filter(el => el),
             wrapResponse("update_room", dataProcessor.getPendingRooms()),
           ],
         ];

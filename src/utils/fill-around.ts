@@ -1,6 +1,6 @@
 import { RawPosition } from "../interfaces/interfaces";
 
-export const fillSectors = (cords: RawPosition[]) => {
+export const fillSectors = (cords: RawPosition[]): RawPosition[] => {
   const cordsStringified = cords.map(el => JSON.stringify(el));
   const aroundCSectors = new Set(
     cords

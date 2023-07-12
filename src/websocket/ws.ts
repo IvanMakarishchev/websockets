@@ -5,59 +5,55 @@ import { WebSocket, WebSocketServer } from "ws";
 import { connections } from "../utils/connections-controller.ts";
 import { UserStates } from "../enums/enums.ts";
 import { PING_PONG_RATE } from "../constants/constants.ts";
+import { generatePositions } from "../utils/position-generator.ts";
 
 export class GameWebsocket {
   private websocket: WebSocketServer;
   constructor(host: string, port: number) {
     this.websocket = new WebSocketServer({ host: host, port: port }, () => {
-      console.log("Websocket started!");
+      console.log("WEBSOCKET STARTED!");
     });
   }
   start(): void {
     this.websocket.on("connection", (ws) => {
       connections.addUserConnection(ws, UserStates.unlogged);
       const index = connections.getUserByConnection(ws)!.id;
-      console.log(connections.getConnectionById(0));
       ws.on("pong", () => connections.updateConnectionState(index, true));
       ws.on("error", console.error);
       ws.on("message", (data) => {
-        // console.log(JSON.parse(data.toString()));
         const parsedMessage = JSON.parse(data.toString()) as WsMessage;
         const parsedData = parsedMessage.data
           ? (JSON.parse(parsedMessage.data) as MessageData)
           : undefined;
-        console.log("————————————————————————————————————————————————————————");
-        // console.log("REQUEST TYPE: ", parsedMessage.type);
-        // console.log("REQUEST INDEX: ", index);
-        // console.log("REQUEST DATA: ", parsedData);
         const result = dataProcessor.processData(
           parsedMessage.type,
           index,
           parsedData
         );
-        result.forEach((mes) =>
+        result.forEach((mes) => {
+          // console.log(mes);
           (mes[0] as UserConnections[]).forEach((el) => {
-            el.ws.send(JSON.stringify(mes[1]));
-          })
-        );
+            if (el) el.ws.send(JSON.stringify(mes[1]));
+          });
+        });
       });
     });
     const interval = setInterval(() => {
+      // connections
+      //   .getAllConnections()
+      //   .forEach((el) => console.log(el.id, " is connected"));
       connections.getAllConnections().forEach((con) => {
-        console.log("USER ID: ", con.id, " : ", UserStates[con.state]);
         if (!con.isAlive) {
-          console.log(con.id, " : CONNECTION TERMINATED");
+          console.log(`${con.id} : CONNECTION TERMINATED`);
+          // console.log("CON ID:", con.id);
           dataProcessor.onTerminate(con.id, con.state).forEach((mes) => {
-            console.log(mes);
             (mes[0] as UserConnections[]).forEach((el) => {
               el.ws.send(JSON.stringify(mes[1]));
             });
           });
-
           connections.removeConnection(con.id);
           return con.ws.terminate();
         }
-        // console.log(con.id, ' : ', con.isAlive);
         connections.updateConnectionState(con.id, false);
         con.ws.ping();
       });
