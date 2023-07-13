@@ -2,7 +2,7 @@
     "name": "ws_task",
     "version": "1.0.0",
     "description": "Template for the WebSocket remote control task",
-    "main": "index.ts",
+    "main": "./index.ts",
     "scripts": {
         "start": "ts-node ./index.ts",
         "start:dev": "ts-node-dev ./index.ts",

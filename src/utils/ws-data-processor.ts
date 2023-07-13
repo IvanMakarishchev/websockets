@@ -1,4 +1,4 @@
-import { MessageData } from "../types/types";
+import { MessageData } from "../type/types";
 import {
   Attack,
   GamesData,
@@ -16,10 +16,9 @@ import {
   Winners,
   WsMessage,
 } from "../interfaces/interfaces";
-import { doAction } from "./ws-actions";
+import { doAction } from "../actions/ws-actions";
 import { fillSectors } from "./fill-around";
 import { connections } from "./connections-controller";
-import { pasReg } from "../constants/constants";
 import { UserStates } from "../enums/enums";
 import { wrapResponse } from "./response-wrapper";
 import { generatePositions } from "./position-generator";
@@ -151,7 +150,7 @@ class WebSocketDataProcessor {
       };
     }
     this.shipsCoords.push(updatedShips as Ships);
-    this.shipsData.push(data)
+    this.shipsData.push(data);
     this.usersHits.push({ indexPlayer: data.indexPlayer!, hits: [] });
     this.availableHits = [
       ...this.availableHits,
@@ -191,8 +190,10 @@ class WebSocketDataProcessor {
         sData.indexPlayer !== shipsDataByPlayer!.indexPlayer
     )!.ships as RawPosition[][][];
     let res = "miss";
+    let shipsAlive = 0;
     const killedArray: RawPosition[] = [];
     enemyPositions.forEach((el) => {
+      if (el[0].length > 0) shipsAlive++;
       const index = el[0].findIndex(
         (pos: RawPosition) => pos.x === data.x && pos.y === data.y
       );
@@ -208,6 +209,7 @@ class WebSocketDataProcessor {
           killedArray.push(...el[1]);
           el[1].length = 0;
           res = "killed";
+          shipsAlive--;
         }
       }
     });
@@ -234,7 +236,11 @@ class WebSocketDataProcessor {
         status: "miss",
       };
     });
-    return res !== "killed"
+    if (shipsAlive === 0)
+      connections.updateActionTime(
+        connections.getConnectionById(data.indexPlayer)!.ws
+      );
+    return res !== "killed" || shipsAlive === 0
       ? [
           {
             position: {
@@ -447,7 +453,7 @@ class WebSocketDataProcessor {
       ];
       if (gameID! >= 0) {
         const winnerName = this.getUserNameByIndex(enemyID!);
-        dataProcessor.addWinner(winnerName);
+        this.addWinner(winnerName);
         response.unshift(
           [
             [connections.getConnectionById(enemyID!)!],
@@ -460,7 +466,7 @@ class WebSocketDataProcessor {
               ...connections.getConnectionsByState(UserStates.logged),
               ...connections.getConnectionsByState(UserStates.inRoom),
             ],
-            wrapResponse("update_winners", dataProcessor.getWinners()),
+            wrapResponse("update_winners", this.getWinners()),
           ]
         );
       }

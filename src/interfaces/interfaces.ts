@@ -1,5 +1,5 @@
-import { UserStates } from "enums/enums";
-import { AttackStatus, ShipTypes } from "types/types";
+import { UserStates } from "../enums/enums";
+import { AttackStatus, ShipTypes } from "../type/types";
 import { WebSocket } from "ws";
 
 export interface WsMessage {
@@ -38,6 +38,7 @@ export interface UserConnections {
   id: number;
   state: UserStates;
   isAlive: boolean;
+  lastActionTime: number;
 }
 export interface Ships {
   ships: RawShips[] | RawPosition[][][];

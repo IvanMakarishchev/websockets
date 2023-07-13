@@ -1,11 +1,10 @@
-import { MessageData } from "../types/types.ts";
-import { UserConnections, WsMessage } from "../interfaces/interfaces.ts";
-import { dataProcessor } from "../utils/ws-data-processor.ts";
-import { WebSocket, WebSocketServer } from "ws";
-import { connections } from "../utils/connections-controller.ts";
-import { UserStates } from "../enums/enums.ts";
-import { PING_PONG_RATE } from "../constants/constants.ts";
-import { generatePositions } from "../utils/position-generator.ts";
+import { MessageData } from "../type/types";
+import { UserConnections, WsMessage } from "../interfaces/interfaces";
+import { dataProcessor } from "../utils/ws-data-processor";
+import { connections } from "../utils/connections-controller";
+import { WebSocketServer } from "ws";
+import { UserStates } from "../enums/enums";
+import { PING_PONG_RATE, THROTTLE_TIME } from "../constants/constants";
 
 export class GameWebsocket {
   private websocket: WebSocketServer;
@@ -21,31 +20,32 @@ export class GameWebsocket {
       ws.on("pong", () => connections.updateConnectionState(index, true));
       ws.on("error", console.error);
       ws.on("message", (data) => {
-        const parsedMessage = JSON.parse(data.toString()) as WsMessage;
-        const parsedData = parsedMessage.data
-          ? (JSON.parse(parsedMessage.data) as MessageData)
-          : undefined;
-        const result = dataProcessor.processData(
-          parsedMessage.type,
-          index,
-          parsedData
-        );
-        result.forEach((mes) => {
-          // console.log(mes);
-          (mes[0] as UserConnections[]).forEach((el) => {
-            if (el) el.ws.send(JSON.stringify(mes[1]));
+        const lastActionTime =
+          connections.getUserByConnection(ws).lastActionTime;
+        // console.log(Date.now() > lastActionTime + THROTTLE_TIME);
+        if (Date.now() > lastActionTime + THROTTLE_TIME) {
+          const parsedMessage = JSON.parse(data.toString()) as WsMessage;
+          const parsedData = parsedMessage.data
+            ? (JSON.parse(parsedMessage.data) as MessageData)
+            : undefined;
+          const result = dataProcessor.processData(
+            parsedMessage.type,
+            index,
+            parsedData
+          );
+          result.forEach((mes) => {
+            console.log(mes[1]);
+            (mes[0] as UserConnections[]).forEach((el) => {
+              if (el) el.ws.send(JSON.stringify(mes[1]));
+            });
           });
-        });
+        }
       });
     });
     const interval = setInterval(() => {
-      // connections
-      //   .getAllConnections()
-      //   .forEach((el) => console.log(el.id, " is connected"));
       connections.getAllConnections().forEach((con) => {
         if (!con.isAlive) {
           console.log(`${con.id} : CONNECTION TERMINATED`);
-          // console.log("CON ID:", con.id);
           dataProcessor.onTerminate(con.id, con.state).forEach((mes) => {
             (mes[0] as UserConnections[]).forEach((el) => {
               el.ws.send(JSON.stringify(mes[1]));

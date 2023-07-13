@@ -1,10 +1,9 @@
 import { UserStates } from "../enums/enums";
-import { UserConnections } from "interfaces/interfaces";
+import { UserConnections } from "../interfaces/interfaces";
 import { WebSocket } from "ws";
 
 class ConnectionsController {
   private clientsConnections: Array<UserConnections> = [];
-  private clientsId = 0;
 
   addUserConnection(ws: WebSocket, userState: UserStates) {
     this.clientsConnections.push({
@@ -12,7 +11,12 @@ class ConnectionsController {
       id: Date.now(),
       state: userState,
       isAlive: true,
+      lastActionTime: 0,
     });
+  }
+
+  updateActionTime(ws: WebSocket) {
+    this.clientsConnections.find(el => el.ws === ws)!.lastActionTime = Date.now();
   }
 
   updateUserState(id: number, state: UserStates) {
