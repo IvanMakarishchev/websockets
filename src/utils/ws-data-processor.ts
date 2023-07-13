@@ -22,6 +22,7 @@ import { connections } from "./connections-controller";
 import { UserStates } from "../enums/enums";
 import { wrapResponse } from "./response-wrapper";
 import { generatePositions } from "./position-generator";
+import { WAIT_AFTER_GAME } from "../constants/constants";
 
 class WebSocketDataProcessor {
   private usersData: NewUser[] = [];
@@ -38,7 +39,7 @@ class WebSocketDataProcessor {
     type: string,
     index: number,
     data?: MessageData
-  ): (UserConnections[] | WsMessage)[][] {
+  ): (UserConnections[] | WsMessage | string)[][] {
     const result = data
       ? Object.entries(doAction).find((el) => el[0] === type)![1](
           type,
@@ -238,9 +239,10 @@ class WebSocketDataProcessor {
     });
     if (shipsAlive === 0)
       connections.updateActionTime(
-        connections.getConnectionById(data.indexPlayer)!.ws
+        connections.getConnectionById(data.indexPlayer)!.ws,
+        WAIT_AFTER_GAME
       );
-    return res !== "killed" || shipsAlive === 0
+    return res !== "killed"
       ? [
           {
             position: {
@@ -260,7 +262,7 @@ class WebSocketDataProcessor {
             currentPlayer: data.indexPlayer,
             status: res,
           })),
-          ...missArray,
+          ...(shipsAlive !== 0 ? missArray : []),
         ];
   }
 

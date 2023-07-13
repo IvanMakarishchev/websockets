@@ -1,3 +1,4 @@
+import { THROTTLE_TIME } from "../constants/constants";
 import { UserStates } from "../enums/enums";
 import { UserConnections } from "../interfaces/interfaces";
 import { WebSocket } from "ws";
@@ -11,12 +12,12 @@ class ConnectionsController {
       id: Date.now(),
       state: userState,
       isAlive: true,
-      lastActionTime: 0,
+      nextActionTime: Date.now() + THROTTLE_TIME,
     });
   }
 
-  updateActionTime(ws: WebSocket) {
-    this.clientsConnections.find(el => el.ws === ws)!.lastActionTime = Date.now();
+  updateActionTime(ws: WebSocket, time: number) {
+    this.clientsConnections.find(el => el.ws === ws)!.nextActionTime = Date.now() + time;
   }
 
   updateUserState(id: number, state: UserStates) {

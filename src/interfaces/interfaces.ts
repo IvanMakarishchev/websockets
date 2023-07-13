@@ -38,7 +38,7 @@ export interface UserConnections {
   id: number;
   state: UserStates;
   isAlive: boolean;
-  lastActionTime: number;
+  nextActionTime: number;
 }
 export interface Ships {
   ships: RawShips[] | RawPosition[][][];

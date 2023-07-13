@@ -4,7 +4,11 @@ import { dataProcessor } from "../utils/ws-data-processor";
 import { connections } from "../utils/connections-controller";
 import { WebSocketServer } from "ws";
 import { UserStates } from "../enums/enums";
-import { PING_PONG_RATE, THROTTLE_TIME } from "../constants/constants";
+import {
+  BOT_TURN_TIME,
+  PING_PONG_RATE,
+  THROTTLE_TIME,
+} from "../constants/constants";
 
 export class GameWebsocket {
   private websocket: WebSocketServer;
@@ -20,10 +24,10 @@ export class GameWebsocket {
       ws.on("pong", () => connections.updateConnectionState(index, true));
       ws.on("error", console.error);
       ws.on("message", (data) => {
-        const lastActionTime =
-          connections.getUserByConnection(ws).lastActionTime;
-        // console.log(Date.now() > lastActionTime + THROTTLE_TIME);
-        if (Date.now() > lastActionTime + THROTTLE_TIME) {
+        const nextActionTime =
+          connections.getUserByConnection(ws).nextActionTime;
+          console.log(Date.now() < nextActionTime);
+        if (Date.now() > nextActionTime) {
           const parsedMessage = JSON.parse(data.toString()) as WsMessage;
           const parsedData = parsedMessage.data
             ? (JSON.parse(parsedMessage.data) as MessageData)
@@ -34,9 +38,18 @@ export class GameWebsocket {
             parsedData
           );
           result.forEach((mes) => {
-            console.log(mes[1]);
             (mes[0] as UserConnections[]).forEach((el) => {
-              if (el) el.ws.send(JSON.stringify(mes[1]));
+              // console.log(mes[1])
+              if (el && mes.length === 2) {
+                connections.updateActionTime(el.ws, THROTTLE_TIME)
+                el.ws.send(JSON.stringify(mes[1]));
+              }
+              if (el && mes.length === 3) {
+                connections.updateActionTime(el.ws, BOT_TURN_TIME);
+                setTimeout(() => {
+                  el.ws.send(JSON.stringify(mes[1]));
+                }, BOT_TURN_TIME);
+              }
             });
           });
         }

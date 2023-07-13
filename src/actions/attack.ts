@@ -5,7 +5,10 @@ import {
   WsMessage,
 } from "../interfaces/interfaces";
 import { MessageData } from "../type/types";
-import { getGameIdByUserId, getRoomConnectionsByUserIndex } from "../utils/data-functions";
+import {
+  getGameIdByUserId,
+  getRoomConnectionsByUserIndex,
+} from "../utils/data-functions";
 import { wrapResponse } from "../utils/response-wrapper";
 import { dataProcessor } from "../utils/ws-data-processor";
 
@@ -17,10 +20,10 @@ export const attack = (type: string, index: number, data: MessageData) => {
     data as Attack
   ) as AttackResult[];
   const gameId = getGameIdByUserId((data as Attack).indexPlayer);
-  let botResolve: (UserConnections[] | WsMessage)[][] = [];
+  let botResolve: (UserConnections[] | WsMessage | string)[][] = [];
   if (isBotGame) {
     let botAttack: AttackResult[] = [];
-    let botTurn: (UserConnections[] | WsMessage)[] = [];
+    let botTurn: (UserConnections[] | WsMessage | string)[] = [];
     const botData: MessageData = {
       x: 0,
       y: 0,
@@ -35,9 +38,10 @@ export const attack = (type: string, index: number, data: MessageData) => {
       wrapResponse("turn", {
         currentPlayer: dataProcessor.getTurn(gameId),
       }),
+      "botTurn",
     ];
     botResolve = [
-      [roomConnections, wrapResponse("attack", botAttack[0])],
+      [roomConnections, wrapResponse("attack", botAttack[0]), "botTurn"],
       botTurn,
     ];
   }
