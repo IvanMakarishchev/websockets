@@ -9,7 +9,6 @@ export const singlePlay = (type: string, index: number) => {
   dataProcessor.createGame(-index, { indexRoom: -index });
   connections.updateUserState(index, UserStates.inPrepare);
   dataProcessor.addShips({ gameId: -index, indexPlayer: -index, ships: [] });
-  dataProcessor.playerTurn(index, -index, -index);
   return [
     [
       [currentConnection],
@@ -19,4 +18,4 @@ export const singlePlay = (type: string, index: number) => {
       ),
     ],
   ];
-}
+};

@@ -15,7 +15,6 @@ export const generatePositions = () => {
     while (currentShip < shipCount) {
       let shipPoints: RawPosition[] = [];
       const direction = Math.random() > 0.5 ? true : false;
-      console.log(direction);
       const pointBroadwise = Math.abs(
         Math.round(Math.random() * fieldSize - 0.5)
       );

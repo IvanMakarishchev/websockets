@@ -13,11 +13,16 @@ class ConnectionsController {
       state: userState,
       isAlive: true,
       nextActionTime: Date.now() + THROTTLE_TIME,
+      turnTime: 0,
     });
   }
 
   updateActionTime(ws: WebSocket, time: number) {
     this.clientsConnections.find(el => el.ws === ws)!.nextActionTime = Date.now() + time;
+  }
+
+  updateTurnTime(ws: WebSocket, time: number) {
+    this.clientsConnections.find(el => el.ws === ws)!.turnTime = Date.now() + time;
   }
 
   updateUserState(id: number, state: UserStates) {

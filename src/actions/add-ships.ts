@@ -1,3 +1,4 @@
+import { THROTTLE_TIME } from "../constants/constants";
 import { UserStates } from "../enums/enums";
 import { Ships } from "../interfaces/interfaces";
 import { MessageData } from "../type/types";
@@ -7,9 +8,22 @@ import { wrapResponse } from "../utils/response-wrapper";
 import { dataProcessor } from "../utils/ws-data-processor";
 
 export const addShips = (type: string, index: number, data: MessageData) => {
+  const roomConnections = getRoomConnectionsByUserIndex(index)?.filter(
+    (el) => el
+  );
+  if (!roomConnections) {
+    connections.updateActionTime(
+      connections.getConnectionById(index)!.ws,
+      THROTTLE_TIME
+    );
+    return [];
+  }
+  connections.updateTurnTime(connections.getConnectionById(index)!.ws, 0);
+  const turnPlayerId = roomConnections.find((el) =>
+    roomConnections.length === 2 ? el.id !== index : el.id === index
+  )!.id;
   const shipsData = data as Ships;
   dataProcessor.addShips(shipsData);
-  const roomConnections = getRoomConnectionsByUserIndex(index);
   const isReady = dataProcessor
     .getShipsData()
     .filter((el) => el.gameId === shipsData.gameId);
@@ -25,19 +39,11 @@ export const addShips = (type: string, index: number, data: MessageData) => {
       [
         roomConnections,
         wrapResponse("turn", {
-          currentPlayer: dataProcessor.getTurn((data as Ships).gameId!),
+          currentPlayer: turnPlayerId,
         }),
       ],
     ];
   } else {
-    const room = dataProcessor
-      .getRooms()
-      .find((el) => el.roomId === (data as Ships).gameId);
-    dataProcessor.playerTurn(
-      index,
-      room!.roomUsers.find((el) => el.index !== index)!.index,
-      (data as Ships).gameId!
-    );
     return [];
   }
-}
+};

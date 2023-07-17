@@ -9,6 +9,9 @@ import { dataProcessor } from "../utils/ws-data-processor";
 export const winner = (type: string, index: number, data: MessageData) => {
   if (type === "attack" || type === "randomAttack") {
     const roomConnections = getRoomConnectionsByUserIndex(index);
+    if (!roomConnections) {
+      return [];
+    }
     const enemyId = dataProcessor
       .getRooms()
       .find((room) => room.roomId === (data as RandomAttack).gameId)!
@@ -21,11 +24,12 @@ export const winner = (type: string, index: number, data: MessageData) => {
       .ships.flat()
       .flat();
     if (!enemyCords.length) {
-      const winnerName = dataProcessor.getUserNameByIndex(
-        (data as RandomAttack).indexPlayer
-      );
-      dataProcessor.addWinner(winnerName);
-      console.log(roomConnections);
+      if (index >= 0) {
+        const winnerName = dataProcessor.getUserNameByIndex(
+          (data as RandomAttack).indexPlayer
+        );
+        dataProcessor.addWinner(winnerName);
+      }
       roomConnections.filter((el) => el).length === 2
         ? dataProcessor.clearGame(
             roomConnections[0].id,
@@ -39,9 +43,7 @@ export const winner = (type: string, index: number, data: MessageData) => {
           );
       roomConnections
         .filter((el) => el)
-        .forEach((el) =>
-          connections.updateUserState(el.id, UserStates.logged)
-        );
+        .forEach((el) => connections.updateUserState(el.id, UserStates.logged));
       return [
         [
           roomConnections.filter((el) => el),
@@ -63,4 +65,4 @@ export const winner = (type: string, index: number, data: MessageData) => {
       ];
     } else return [];
   } else return [];
-}
+};

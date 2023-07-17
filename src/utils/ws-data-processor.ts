@@ -12,7 +12,6 @@ import {
   UserConnections,
   UserData,
   UsersHits,
-  UsersTurn,
   Winners,
   WsMessage,
 } from "../interfaces/interfaces";
@@ -22,7 +21,7 @@ import { connections } from "./connections-controller";
 import { UserStates } from "../enums/enums";
 import { wrapResponse } from "./response-wrapper";
 import { generatePositions } from "./position-generator";
-import { WAIT_AFTER_GAME } from "../constants/constants";
+import { WAIT_AFTER_GAME, pasReg } from "../constants/constants";
 
 class WebSocketDataProcessor {
   private usersData: NewUser[] = [];
@@ -32,14 +31,13 @@ class WebSocketDataProcessor {
   private shipsData: Ships[] = [];
   private usersHits: UsersHits[] = [];
   private availableHits: UsersHits[] = [];
-  private usersTurns: UsersTurn[] = [];
   private winnersData: Winners[] = [];
 
   processData(
     type: string,
     index: number,
     data?: MessageData
-  ): (UserConnections[] | WsMessage | string)[][] {
+  ): (UserConnections[] | WsMessage)[][] {
     const result = data
       ? Object.entries(doAction).find((el) => el[0] === type)![1](
           type,
@@ -54,13 +52,19 @@ class WebSocketDataProcessor {
 
   createNewUser(data: UserData, index: number): NewUser {
     let errorMessage = "";
+    if (data.name.length < 5)
+      errorMessage = "You need minimum 5 characters for name";
+    if (data.name[0] !== data.name[0].toUpperCase())
+      errorMessage = "Start your name with capital letter";
+    if (!data.password.match(pasReg))
+      errorMessage = "Password error: min 8 characters, min 1 digit";
     const newUser = {
       name: data.name,
       index: index,
-      error: Boolean(errorMessage.length),
+      error: Boolean(errorMessage),
       errorText: errorMessage,
     };
-    if (newUser.error) return newUser;
+    if (errorMessage.length) return newUser;
     this.usersData.push(newUser);
     return this.getUser(newUser.name);
   }
@@ -157,31 +161,35 @@ class WebSocketDataProcessor {
       ...this.availableHits,
       {
         indexPlayer: data.indexPlayer!,
-        hits: new Set(
-          new Array(10)
-            .fill([])
-            .map((_, iY) => new Array(10).fill([]).map((_, iX) => [iX, iY]))
-            .flat()
-        ),
+        hits: new Array(10)
+          .fill([])
+          .map((_, iY) =>
+            new Array(10)
+              .fill({ x: 0, y: 0 })
+              .map((_, iX) => ({ x: iX, y: iY }))
+          )
+          .flat(),
       },
     ];
   }
 
   attackResult(data: Attack) {
-    const gameId = this.gamesData.find((el) => el.idPlayer)!.idGame;
-    const gameIndex = this.usersTurns.findIndex((el) => el.gameID === gameId)!;
+    let isBot = false;
+    if (data.indexPlayer < 0) {
+      isBot = true;
+    }
     let isAvailableSector = false;
-    let isPlayerTurn = data.indexPlayer === this.usersTurns[gameIndex].turn[0];
     const userAvailableHits = this.availableHits.find(
       (el) => el.indexPlayer === data.indexPlayer
     );
-    (userAvailableHits!.hits as Set<number[]>).forEach((el) => {
-      if (el[0] === data.x && el[1] === data.y && isPlayerTurn) {
-        (userAvailableHits!.hits as Set<number[]>).delete(el);
-        isAvailableSector = true;
-      }
-    });
-    if (!isAvailableSector || !isPlayerTurn) return [];
+    if (userAvailableHits)
+      (userAvailableHits.hits as RawPosition[]).forEach((el, i) => {
+        if (el.x === data.x && el.y === data.y) {
+          userAvailableHits!.hits.splice(i, 1);
+          isAvailableSector = true;
+        }
+      });
+    if (!isAvailableSector) return [];
     const shipsDataByPlayer = this.shipsCoords.find(
       (el) => el.indexPlayer === data.indexPlayer
     );
@@ -191,10 +199,9 @@ class WebSocketDataProcessor {
         sData.indexPlayer !== shipsDataByPlayer!.indexPlayer
     )!.ships as RawPosition[][][];
     let res = "miss";
-    let shipsAlive = 0;
+    let shipsAlive = enemyPositions.length;
     const killedArray: RawPosition[] = [];
     enemyPositions.forEach((el) => {
-      if (el[0].length > 0) shipsAlive++;
       const index = el[0].findIndex(
         (pos: RawPosition) => pos.x === data.x && pos.y === data.y
       );
@@ -210,38 +217,62 @@ class WebSocketDataProcessor {
           killedArray.push(...el[1]);
           el[1].length = 0;
           res = "killed";
-          shipsAlive--;
         }
       }
+      if (!el[0].length) shipsAlive--;
     });
     if (res === "miss") {
-      [...this.usersTurns[gameIndex].turn] = [
-        this.usersTurns[gameIndex].turn[1],
-        this.usersTurns[gameIndex].turn[0],
-      ];
+      let enemyId = -data.indexPlayer;
+      if (data.gameId! >= 0) {
+        connections.updateTurnTime(
+          connections.getConnectionById(data.indexPlayer)!.ws,
+          Date.now()
+        );
+        enemyId = this.gamesData.find(
+          (el) =>
+            (el.idGame === data.gameId || el.idGame === data.gameID) &&
+            el.idPlayer !== data.indexPlayer
+        )!.idPlayer;
+        connections.updateTurnTime(
+          connections.getConnectionById(enemyId)!.ws,
+          -1000
+        );
+      }
+      if (data.gameId! < 0) {
+        const playerIndex = connections.getConnectionById(data.indexPlayer)
+          ? data.indexPlayer
+          : -data.indexPlayer;
+        connections.updateTurnTime(
+          connections.getConnectionById(playerIndex)!.ws,
+          Date.now()
+        );
+      }
     }
-    const missArray = fillSectors(killedArray).map((pos) => {
-      (userAvailableHits!.hits as Set<number[]>).forEach((el) => {
-        if (el[0] === pos.x && el[1] === pos.y) {
-          (userAvailableHits!.hits as Set<number[]>).delete(el);
-          isAvailableSector = true;
-        }
-      });
-      return {
-        userId: data.indexPlayer,
-        position: {
-          x: pos.x,
-          y: pos.y,
-        },
-        currentPlayer: data.indexPlayer,
-        status: "miss",
-      };
-    });
-    if (shipsAlive === 0)
-      connections.updateActionTime(
-        connections.getConnectionById(data.indexPlayer)!.ws,
-        WAIT_AFTER_GAME
-      );
+    const missArray = userAvailableHits
+      ? fillSectors(killedArray).map((pos) => {
+          (userAvailableHits.hits as RawPosition[]).forEach((el, i) => {
+            if (el.x === pos.x && el.y === pos.y) {
+              userAvailableHits.hits.splice(i, 1);
+              isAvailableSector = true;
+            }
+          });
+          return {
+            position: {
+              x: pos.x,
+              y: pos.y,
+            },
+            currentPlayer: data.indexPlayer,
+            status: "miss",
+          };
+        })
+      : [];
+    if (shipsAlive === 0) {
+      if (data.indexPlayer >= 0)
+        connections.updateActionTime(
+          connections.getConnectionById(data.indexPlayer)!.ws,
+          WAIT_AFTER_GAME
+        );
+    }
     return res !== "killed"
       ? [
           {
@@ -262,39 +293,35 @@ class WebSocketDataProcessor {
             currentPlayer: data.indexPlayer,
             status: res,
           })),
-          ...(shipsAlive !== 0 ? missArray : []),
+          ...missArray,
         ];
   }
 
   getRandomData(index: number, data: MessageData) {
-    const userAvailableHits = Array.from(
-      this.availableHits.find((el) => el.indexPlayer === index)!.hits as Set<
-        number[]
-      >
-    );
-    const randomCords = Math.round(
+    const userAvailableHits = this.availableHits.find(
+      (el) => el.indexPlayer === index
+    )?.hits;
+    let randomCords: number;
+    let correctCords = false;
+    randomCords = Math.round(
       Math.random() *
-        (userAvailableHits.length > 0
+        (userAvailableHits && userAvailableHits.length > 0
           ? Math.abs(userAvailableHits.length - 1)
           : 0)
     );
-    return {
-      gameID: (data as RandomAttack).gameID,
-      x: userAvailableHits[randomCords][0],
-      y: userAvailableHits[randomCords][1],
-      indexPlayer: index,
-    };
-  }
-
-  playerTurn(firstIndex: number, secondIndex: number, gameID: number) {
-    this.usersTurns.push({
-      gameID: gameID,
-      turn: [firstIndex, secondIndex],
-    });
-  }
-
-  getTurn(index: number) {
-    return this.usersTurns.find((el) => el.gameID === index)!.turn[0];
+    return userAvailableHits
+      ? {
+          gameID: (data as RandomAttack).gameId!,
+          x: userAvailableHits[randomCords!].x,
+          y: userAvailableHits[randomCords!].y,
+          indexPlayer: index,
+        }
+      : {
+          gameID: (data as RandomAttack).gameId!,
+          x: 0,
+          y: 0,
+          indexPlayer: index,
+        };
   }
 
   getUsers() {
@@ -341,20 +368,28 @@ class WebSocketDataProcessor {
   }
 
   clearGame(pOneId: number, pTwoId: number, gameIndex: number) {
-    this.roomsData.splice(
-      this.roomsData.findIndex((el) => el.roomId === gameIndex),
+    if (pTwoId >= 0) {
+      connections.updateTurnTime(connections.getConnectionById(pTwoId)!.ws, 0);
+    }
+    connections.updateTurnTime(connections.getConnectionById(pOneId)!.ws, 0);
+    this.usersHits.splice(
+      this.usersHits.findIndex((el) => el.indexPlayer === pTwoId),
       1
     );
-    this.gamesData.splice(
-      this.gamesData.findIndex((el) => el.idPlayer === pOneId),
+    this.availableHits.splice(
+      this.availableHits.findIndex((el) => el.indexPlayer === pTwoId),
       1
     );
     this.gamesData.splice(
       this.gamesData.findIndex((el) => el.idPlayer === pTwoId),
       1
     );
-    this.usersTurns.splice(
-      this.usersTurns.findIndex((el) => el.gameID === gameIndex),
+    this.roomsData.splice(
+      this.roomsData.findIndex((el) => el.roomId === gameIndex),
+      1
+    );
+    this.gamesData.splice(
+      this.gamesData.findIndex((el) => el.idPlayer === pOneId),
       1
     );
     this.shipsCoords
@@ -369,16 +404,8 @@ class WebSocketDataProcessor {
       this.usersHits.findIndex((el) => el.indexPlayer === pOneId),
       1
     );
-    this.usersHits.splice(
-      this.usersHits.findIndex((el) => el.indexPlayer === pTwoId),
-      1
-    );
     this.availableHits.splice(
       this.availableHits.findIndex((el) => el.indexPlayer === pOneId),
-      1
-    );
-    this.availableHits.splice(
-      this.availableHits.findIndex((el) => el.indexPlayer === pTwoId),
       1
     );
   }
@@ -414,6 +441,10 @@ class WebSocketDataProcessor {
         )!.idPlayer;
         const enemyConnection = connections.getUserById(enemyId);
         connections.updateUserState(enemyId, UserStates.logged);
+        connections.updateTurnTime(
+          connections.getConnectionById(enemyId)!.ws,
+          0
+        );
         response.push(
           [
             enemyConnection,
@@ -430,9 +461,8 @@ class WebSocketDataProcessor {
       }
     }
     if (state > UserStates.inPrepare) {
-      const gameID = this.shipsCoords.find(
-        (el) => el.indexPlayer === id
-      )!.gameId;
+      const gameID = this.gamesData.find((el) => el.idPlayer === id)!.idGame;
+      this.gamesData = [...this.gamesData.filter((el) => el.idGame !== gameID)];
       const enemyID = this.shipsCoords.find(
         (el) => el.gameId === gameID && el.indexPlayer !== id
       )!.indexPlayer;
@@ -440,9 +470,6 @@ class WebSocketDataProcessor {
         ...this.shipsCoords.filter((el) => el.gameId !== gameID),
       ];
       this.shipsData = [...this.shipsData.filter((el) => el.gameId !== gameID)];
-      this.usersTurns = [
-        ...this.usersTurns.filter((el) => el.gameID !== gameID),
-      ];
       this.usersHits = [
         ...this.usersHits.filter(
           (el) => el.indexPlayer !== id && el.indexPlayer !== enemyID

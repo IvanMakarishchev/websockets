@@ -39,6 +39,7 @@ export interface UserConnections {
   state: UserStates;
   isAlive: boolean;
   nextActionTime: number;
+  turnTime: number;
 }
 export interface Ships {
   ships: RawShips[] | RawPosition[][][];
@@ -61,6 +62,7 @@ export interface Attack {
   x: number;
   y: number;
   indexPlayer: number;
+  gameId?: number;
 }
 export interface AttackResult {
   position: {
@@ -70,10 +72,11 @@ export interface AttackResult {
   currentPlayer: number;
   status: AttackStatus;
   userId?: number;
+  isBot?: boolean;
 }
 export interface UsersHits {
   indexPlayer: number;
-  hits: RawPosition[] | Set<number[]>;
+  hits: RawPosition[];
 }
 export interface RandomAttack {
   indexPlayer: number;

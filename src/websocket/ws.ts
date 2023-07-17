@@ -24,10 +24,10 @@ export class GameWebsocket {
       ws.on("pong", () => connections.updateConnectionState(index, true));
       ws.on("error", console.error);
       ws.on("message", (data) => {
-        const nextActionTime =
-          connections.getUserByConnection(ws).nextActionTime;
-          console.log(Date.now() < nextActionTime);
-        if (Date.now() > nextActionTime) {
+        const userConnection = connections.getUserByConnection(ws);
+        const nextActionTime = userConnection.nextActionTime;
+        const turnTime = userConnection.turnTime;
+        if (Date.now() > nextActionTime && Date.now() > turnTime) {
           const parsedMessage = JSON.parse(data.toString()) as WsMessage;
           const parsedData = parsedMessage.data
             ? (JSON.parse(parsedMessage.data) as MessageData)
@@ -37,21 +37,47 @@ export class GameWebsocket {
             index,
             parsedData
           );
-          result.forEach((mes) => {
-            (mes[0] as UserConnections[]).forEach((el) => {
-              // console.log(mes[1])
-              if (el && mes.length === 2) {
-                connections.updateActionTime(el.ws, THROTTLE_TIME)
-                el.ws.send(JSON.stringify(mes[1]));
-              }
-              if (el && mes.length === 3) {
-                connections.updateActionTime(el.ws, BOT_TURN_TIME);
-                setTimeout(() => {
-                  el.ws.send(JSON.stringify(mes[1]));
-                }, BOT_TURN_TIME);
-              }
-            });
-          });
+          let isBotTurn = false;
+          let isBotTimes = 0;
+          for (let i = 0; i < result.length; i++) {
+            if (!result[i].length) continue;
+            if (JSON.parse((result[i][1] as WsMessage).data).type === "break")
+              break;
+            if ("isBot" in JSON.parse((result[i][1] as WsMessage).data))
+              isBotTurn = true;
+            if (isBotTurn) {
+              connections.updateTurnTime(
+                (result[i][0] as UserConnections[])[0].ws,
+                Date.now()
+              );
+              if ("isBot" in JSON.parse((result[i][1] as WsMessage).data))
+                isBotTimes++;
+              setTimeout(
+                () =>
+                  (result[i][0] as UserConnections[]).forEach((el) => {
+                    connections.updateActionTime(el.ws, THROTTLE_TIME);
+                    el.ws.send(JSON.stringify(result[i][1]));
+                  }),
+                BOT_TURN_TIME * isBotTimes
+              );
+            } else {
+              (result[i][0] as UserConnections[]).forEach((el) => {
+                connections.updateActionTime(el.ws, THROTTLE_TIME);
+                el.ws.send(JSON.stringify(result[i][1]));
+              });
+            }
+          }
+          if (result.length && (result[0][0] as UserConnections[]).length === 1)
+            setTimeout(
+              () =>
+                connections.updateTurnTime(
+                  (result[0][0] as UserConnections[])[0].ws,
+                  0
+                ),
+              BOT_TURN_TIME * isBotTimes
+            );
+          isBotTurn = false;
+          isBotTimes = 0;
         }
       });
     });
