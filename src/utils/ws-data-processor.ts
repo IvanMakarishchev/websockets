@@ -52,6 +52,9 @@ class WebSocketDataProcessor {
 
   createNewUser(data: UserData, index: number): NewUser {
     let errorMessage = "";
+    const names = this.usersData.map(el => el.name);
+    if (names.includes(data.name))
+      errorMessage = `User name ${data.name} already exists`;
     if (data.name.length < 5)
       errorMessage = "You need minimum 5 characters for name";
     if (data.name[0] !== data.name[0].toUpperCase())
@@ -222,23 +225,22 @@ class WebSocketDataProcessor {
       if (!el[0].length) shipsAlive--;
     });
     if (res === "miss") {
+      const gameID = data.gameID ? data.gameID : data.gameId;
       let enemyId = -data.indexPlayer;
-      if (data.gameId! >= 0) {
+      if (gameID! >= 0) {
         connections.updateTurnTime(
           connections.getConnectionById(data.indexPlayer)!.ws,
           Date.now()
         );
         enemyId = this.gamesData.find(
-          (el) =>
-            (el.idGame === data.gameId || el.idGame === data.gameID) &&
-            el.idPlayer !== data.indexPlayer
+          (el) => el.idGame === gameID && el.idPlayer !== data.indexPlayer
         )!.idPlayer;
         connections.updateTurnTime(
           connections.getConnectionById(enemyId)!.ws,
           -1000
         );
       }
-      if (data.gameId! < 0) {
+      if (gameID! < 0) {
         const playerIndex = connections.getConnectionById(data.indexPlayer)
           ? data.indexPlayer
           : -data.indexPlayer;
@@ -444,6 +446,18 @@ class WebSocketDataProcessor {
         connections.updateTurnTime(
           connections.getConnectionById(enemyId)!.ws,
           0
+        );
+        this.shipsCoords = this.shipsCoords.filter(
+          (el) => el.indexPlayer !== enemyId
+        );
+        this.shipsData = this.shipsData.filter(
+          (el) => el.indexPlayer !== enemyId
+        );
+        this.availableHits = this.availableHits.filter(
+          (el) => el.indexPlayer !== enemyId
+        );
+        this.usersHits = this.usersHits.filter(
+          (el) => el.indexPlayer !== enemyId
         );
         response.push(
           [
